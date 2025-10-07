@@ -200,6 +200,7 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: 20,
+
     marginBottom: 24,
   },
   codeInputContainer: {
