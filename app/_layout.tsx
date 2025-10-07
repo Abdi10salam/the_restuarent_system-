@@ -34,15 +34,7 @@ export default function RootLayout() {
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
       <AppProvider>
         <AuthProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="portal-selection" />
-            <Stack.Screen name="login" />
-            <Stack.Screen name="verify-otp" />
-            <Stack.Screen name="set-password" />
-            <Stack.Screen name="(admin)" />
-            <Stack.Screen name="(tabs)" />
-          </Stack>
+          <Stack screenOptions={{ headerShown: false }} />
         </AuthProvider>
       </AppProvider>
     </ClerkProvider>

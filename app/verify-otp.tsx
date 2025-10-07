@@ -4,14 +4,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Shield, ArrowLeft, Mail } from 'lucide-react-native';
 import { useSignUp } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
-import { useApp } from '../context/AppContext';
 
 export default function VerifyOTPScreen() {
   const router = useRouter();
   const { email } = useLocalSearchParams<{ email: string }>();
-  const { signUp, setActive } = useSignUp();
-  const { dispatch: authDispatch } = useAuth();
-  const { state: appState } = useApp();
+  const { signUp } = useSignUp();
+  const { dispatch: authDispatch, setPendingEmail } = useAuth();
 
   const [code, setCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -31,33 +29,33 @@ export default function VerifyOTPScreen() {
       });
 
       if (completeSignUp?.status === 'complete') {
-        // Set the active session
-        await setActive?.({ session: completeSignUp.createdSessionId });
+        // Get user metadata from Clerk
+        const metadata = signUp?.unsafeMetadata as any;
 
-        // Find the customer in app state
-        const customer = appState.customers.find(c => c.email === email);
+        // Create customer object from Clerk metadata
+        const customer: any = {
+          id: completeSignUp.createdUserId,
+          name: metadata?.name || 'Customer',
+          email: email,
+          paymentType: metadata?.paymentType || 'monthly',
+          monthlyBalance: metadata?.monthlyBalance || 0,
+          totalSpent: metadata?.totalSpent || 0,
+          isFirstLogin: true,
+          registeredAt: metadata?.registeredAt || new Date().toISOString(),
+        };
 
-        if (customer) {
-          // Log the customer in
-          authDispatch({
-            type: 'LOGIN',
-            userType: 'customer',
-            user: customer
-          });
+        // Log the customer in temporarily
+        authDispatch({
+          type: 'LOGIN',
+          userType: 'customer',
+          user: customer
+        });
 
-          Alert.alert(
-            'Success',
-            'Email verified successfully! Please set your password.',
-            [
-              {
-                text: 'Continue',
-                onPress: () => router.replace('/set-password'),
-              },
-            ]
-          );
-        } else {
-          Alert.alert('Error', 'Customer account not found');
-        }
+        // Store email for password setup
+        setPendingEmail(email);
+
+        // Redirect to set password - DON'T set active session yet
+        router.replace('/set-password');
       } else {
         Alert.alert('Error', 'Verification incomplete. Please try again.');
       }

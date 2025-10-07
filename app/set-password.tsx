@@ -2,15 +2,14 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Lock, Eye, EyeOff } from 'lucide-react-native';
-import { useSignUp } from '@clerk/clerk-expo';
+import { useSignUp, useClerk } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
-import { useApp } from '../context/AppContext';
 
 export default function SetPasswordScreen() {
   const router = useRouter();
   const { state, setPassword } = useAuth();
-  const { dispatch: appDispatch } = useApp();
   const { signUp } = useSignUp();
+  const { setActive } = useClerk();
 
   const [password, setPasswordValue] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -42,27 +41,21 @@ export default function SetPasswordScreen() {
     setIsLoading(true);
 
     try {
-      // Update password in Clerk
+      // Update password in Clerk and activate session
       await signUp?.update({
         password: password,
       });
 
+      // Now set the active session
+      if (signUp?.createdSessionId) {
+        await setActive?.({ session: signUp.createdSessionId });
+      }
+
       // Update local state
       setPassword(state.currentUser.id, password);
 
-      // Update customer's first login status in app state
-      appDispatch({
-        type: 'UPDATE_CUSTOMER',
-        customerId: state.currentUser.id,
-        updates: { isFirstLogin: false, password: password }
-      });
-
-      Alert.alert('Success', 'Password set successfully!', [
-        {
-          text: 'Continue',
-          onPress: () => router.replace('/(tabs)'),
-        },
-      ]);
+      // Navigate to home
+      router.replace('/(tabs)');
     } catch (err: any) {
       console.error('Set password error:', err);
       Alert.alert(

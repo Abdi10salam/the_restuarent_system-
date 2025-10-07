@@ -4,14 +4,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ChefHat, Mail, Lock, ArrowLeft } from 'lucide-react-native';
 import { useSignIn } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
-import { useApp } from '../context/AppContext';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { portal } = useLocalSearchParams<{ portal: 'customer' | 'admin' }>();
   const { signIn, setActive } = useSignIn();
   const { login, dispatch: authDispatch } = useAuth();
-  const { state: appState } = useApp();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,52 +25,45 @@ export default function LoginScreen() {
       return;
     }
 
-    if (!isCustomer && !password) {
-      Alert.alert('Error', 'Please enter your password');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
       if (isCustomer) {
-        // For customers, check if they're registered
-        const customer = appState.customers.find(c => c.email.toLowerCase() === email.toLowerCase());
+        // Try to sign in with Clerk to check if user exists
+        try {
+          const signInAttempt = await signIn?.create({
+            identifier: email,
+          });
 
-        if (!customer) {
-          Alert.alert('Error', 'Email not found. Please contact the admin to register your account.');
-          setIsLoading(false);
-          return;
-        }
+          // If user exists and needs password
+          if (signInAttempt?.status === 'needs_first_factor') {
+            if (!password) {
+              Alert.alert('Error', 'Please enter your password');
+              setIsLoading(false);
+              return;
+            }
 
-        if (customer.isFirstLogin) {
-          // First time login - need OTP verification
-          Alert.alert(
-            'First Time Login',
-            'Please verify your email with the OTP code sent during registration.',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  (router.push as any)(`/verify-otp?email=${encodeURIComponent(email)}`);
-                },
-              },
-            ]
-          );
-          setIsLoading(false);
-          return;
-        }
-
-        // Customer with password - use Clerk sign in
-        if (password) {
-          try {
-            const result = await signIn?.create({
-              identifier: email,
+            // Try password login
+            const result = await signIn?.attemptFirstFactor({
+              strategy: 'password',
               password: password,
             });
 
             if (result?.status === 'complete') {
               await setActive?.({ session: result.createdSessionId });
+
+              // Get user metadata
+              const metadata = (result as any).userData?.unsafeMetadata || {};
+              const customer = {
+                id: (result as any).createdUserId || email,
+                name: metadata.name || 'Customer',
+                email: email,
+                paymentType: metadata.paymentType || 'monthly',
+                monthlyBalance: metadata.monthlyBalance || 0,
+                totalSpent: metadata.totalSpent || 0,
+                isFirstLogin: false,
+                registeredAt: metadata.registeredAt || new Date().toISOString(),
+              };
 
               authDispatch({
                 type: 'LOGIN',
@@ -82,14 +73,26 @@ export default function LoginScreen() {
 
               router.replace('/(tabs)');
             }
-          } catch (signInError: any) {
-            Alert.alert('Error', 'Invalid email or password');
           }
-        } else {
-          Alert.alert('Error', 'Please enter your password');
+        } catch (clerkError: any) {
+          // If user doesn't exist in Clerk, they need to be registered by admin
+          if (clerkError.errors?.[0]?.code === 'form_identifier_not_found') {
+            Alert.alert('Error', 'Email not found. Please contact the admin to register your account.');
+          } else if (clerkError.errors?.[0]?.code === 'form_password_incorrect') {
+            Alert.alert('Error', 'Incorrect password');
+          } else {
+            // First time user - redirect to OTP verification
+            (router.push as any)(`/verify-otp?email=${encodeURIComponent(email)}`);
+          }
         }
       } else {
         // Admin login (no Clerk)
+        if (!password) {
+          Alert.alert('Error', 'Please enter your password');
+          setIsLoading(false);
+          return;
+        }
+
         const result = await login('admin', email, password);
 
         if (result.success) {
@@ -156,7 +159,7 @@ export default function LoginScreen() {
 
         {isCustomer && (
           <Text style={styles.helperText}>
-            First time? You'll be asked to verify your email with OTP
+            First time? Enter your email only - you'll verify with OTP
           </Text>
         )}
 

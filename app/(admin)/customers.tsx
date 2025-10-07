@@ -40,16 +40,24 @@ export default function AdminCustomersScreen() {
 
     try {
       // Create sign up with Clerk - this will send OTP to email
-      await signUp?.create({
+      const clerkUser = await signUp?.create({
         emailAddress: newCustomer.email,
+        unsafeMetadata: {
+          name: newCustomer.name,
+          paymentType: newCustomer.paymentType,
+          monthlyBalance: 0,
+          totalSpent: 0,
+          isFirstLogin: true,
+          registeredAt: new Date().toISOString(),
+        }
       });
 
       // Prepare the email verification (sends OTP)
       await signUp?.prepareEmailAddressVerification({ strategy: 'email_code' });
 
-      // Add customer to local state
+      // Add customer to local state with Clerk ID
       const customer: Customer = {
-        id: Date.now().toString(),
+        id: clerkUser?.createdUserId || Date.now().toString(),
         name: newCustomer.name,
         email: newCustomer.email,
         paymentType: newCustomer.paymentType,
