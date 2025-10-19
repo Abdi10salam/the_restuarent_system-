@@ -6,7 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { Customer } from '../../types';
 
 export default function AdminCustomersScreen() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, addCustomerToSupabase } = useApp();
   const { customers, orders } = state;
   const { signUp } = useSignUp();
 
@@ -19,73 +19,60 @@ export default function AdminCustomersScreen() {
   });
 
   const handleAddCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.email) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+  if (!newCustomer.name || !newCustomer.email) {
+    Alert.alert('Error', 'Please fill in all fields');
+    return;
+  }
 
-    if (!newCustomer.email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
+  if (!newCustomer.email.includes('@')) {
+    Alert.alert('Error', 'Please enter a valid email address');
+    return;
+  }
 
-    // Check if email already exists
-    const existingCustomer = customers.find(c => c.email === newCustomer.email);
-    if (existingCustomer) {
-      Alert.alert('Error', 'A customer with this email already exists');
-      return;
-    }
+  const existingCustomer = customers.find(c => c.email === newCustomer.email);
+  if (existingCustomer) {
+    Alert.alert('Error', 'A customer with this email already exists');
+    return;
+  }
 
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    try {
-      // Create sign up with Clerk - this will send OTP to email
-      const clerkUser = await signUp?.create({
-        emailAddress: newCustomer.email,
-        unsafeMetadata: {
-          name: newCustomer.name,
-          paymentType: newCustomer.paymentType,
-          monthlyBalance: 0,
-          totalSpent: 0,
-          isFirstLogin: true,
-          registeredAt: new Date().toISOString(),
-        }
-      });
+  try {
+    // 🔥 DON'T create Clerk user here - only create Supabase record
+    // Clerk signup will happen when customer first logs in
+    
+    const customer: Customer = {
+      id: Date.now().toString(), // Temporary ID until Clerk creates the user
+      name: newCustomer.name,
+      email: newCustomer.email,
+      paymentType: newCustomer.paymentType,
+      monthlyBalance: 0,
+      totalSpent: 0,
+      isFirstLogin: true,
+      registeredAt: new Date().toISOString(),
+    };
 
-      // Prepare the email verification (sends OTP)
-      await signUp?.prepareEmailAddressVerification({ strategy: 'email_code' });
+    // 🔥 ONLY ADD TO SUPABASE (no Clerk yet)
+    await addCustomerToSupabase(customer, 'admin@test.com');
 
-      // Add customer to local state with Clerk ID
-      const customer: Customer = {
-        id: clerkUser?.createdUserId || Date.now().toString(),
-        name: newCustomer.name,
-        email: newCustomer.email,
-        paymentType: newCustomer.paymentType,
-        monthlyBalance: 0,
-        totalSpent: 0,
-        isFirstLogin: true,
-        registeredAt: new Date().toISOString(),
-      };
+    setNewCustomer({ name: '', email: '', paymentType: 'monthly' });
+    setShowAddModal(false);
 
-      dispatch({ type: 'ADD_CUSTOMER', customer });
-      setNewCustomer({ name: '', email: '', paymentType: 'monthly' });
-      setShowAddModal(false);
-
-      Alert.alert(
-        'Success',
-        `Customer registered! An OTP has been sent to ${newCustomer.email}. The customer should check their email and use the verification code to complete registration.`,
-        [{ text: 'OK' }]
-      );
-    } catch (err: any) {
-      console.error('Error creating customer:', err);
-      Alert.alert(
-        'Error',
-        err.errors?.[0]?.message || 'Failed to register customer. Please try again.'
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    Alert.alert(
+      'Success',
+      `Customer registered! They can now login with ${newCustomer.email} and will receive an OTP to verify.`,
+      [{ text: 'OK' }]
+    );
+  } catch (err: any) {
+    console.error('Error creating customer:', err);
+    Alert.alert(
+      'Error',
+      err.message || 'Failed to register customer. Please try again.'
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const generateMonthlyBill = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
@@ -194,7 +181,6 @@ export default function AdminCustomersScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Add Customer Modal */}
       <Modal
         visible={showAddModal}
         transparent
@@ -205,7 +191,7 @@ export default function AdminCustomersScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Register New Customer</Text>
             <Text style={styles.modalDescription}>
-              Customer will receive an OTP via email to verify their account
+              Customer will receive an OTP when they first login to verify their account
             </Text>
 
             <View style={styles.modalForm}>

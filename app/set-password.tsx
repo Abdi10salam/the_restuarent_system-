@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useSignUp, useClerk } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from "./lib/supabase";
+
 
 export default function SetPasswordScreen() {
   const router = useRouter();
@@ -41,20 +43,29 @@ export default function SetPasswordScreen() {
     setIsLoading(true);
 
     try {
-      // Update password in Clerk and activate session
+      // Update password in Clerk
       await signUp?.update({
         password: password,
       });
 
-      // Now set the active session
+      // Activate Clerk session
       if (signUp?.createdSessionId) {
         await setActive?.({ session: signUp.createdSessionId });
       }
 
+      // 🔥 UPDATE SUPABASE: Mark first login as false
+      await supabase
+        .from('customers')
+        .update({ 
+          is_first_login: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', state.currentUser.email);
+
       // Update local state
       setPassword(state.currentUser.id, password);
 
-      // Navigate to home
+      // Navigate to customer dashboard
       router.replace('/(tabs)');
     } catch (err: any) {
       console.error('Set password error:', err);

@@ -4,11 +4,13 @@ import { Clock } from 'lucide-react-native';
 import { OrderStatusCard } from '../../components/OrderStatusCard';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function OrdersScreen() {
   const { state } = useApp();
   const { state: authState } = useAuth();
   const { orders } = state;
+  
 
   // Filter orders for current customer only
   const customerOrders = orders.filter(order => order.customerId === authState.currentUser?.id);
@@ -31,10 +33,11 @@ export default function OrdersScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Order Status</Text>
-        <Text style={styles.subtitle}>{customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''}</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FF0000' }}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Order Status</Text>
+          <Text style={styles.subtitle}>{customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''}</Text>
       </View>
 
       <ScrollView 
@@ -48,6 +51,7 @@ export default function OrdersScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
+     </SafeAreaView>
   );
 }
 

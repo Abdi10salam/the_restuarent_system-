@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { CartItem, Order, Dish, Customer, MonthlyBill } from '../types';
-import { mockDishes, mockCustomers } from '../data/mockData';
+import { mockDishes } from '../data/mockData';
+import { supabase } from "../app/lib/supabase";
+
 
 interface AppState {
   cart: CartItem[];
@@ -8,6 +10,7 @@ interface AppState {
   customers: Customer[];
   dishes: Dish[];
   monthlyBills: MonthlyBill[];
+  isLoading: boolean;
 }
 
 type AppAction =
@@ -19,18 +22,21 @@ type AppAction =
   | { type: 'UPDATE_ORDER_STATUS'; orderId: string; status: 'approved' | 'rejected' }
   | { type: 'ADD_CUSTOMER'; customer: Customer }
   | { type: 'UPDATE_CUSTOMER'; customerId: string; updates: Partial<Customer> }
+  | { type: 'SET_CUSTOMERS'; customers: Customer[] }
   | { type: 'ADD_DISH'; dish: Dish }
   | { type: 'UPDATE_DISH'; dishId: string; updates: Partial<Dish> }
   | { type: 'DELETE_DISH'; dishId: string }
   | { type: 'GENERATE_MONTHLY_BILL'; customerId: string }
-  | { type: 'MARK_BILL_PAID'; billId: string };
+  | { type: 'MARK_BILL_PAID'; billId: string }
+  | { type: 'SET_LOADING'; loading: boolean };
 
 const initialState: AppState = {
   cart: [],
   orders: [],
-  customers: mockCustomers,
+  customers: [],
   dishes: mockDishes,
   monthlyBills: [],
+  isLoading: false,
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -129,6 +135,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, orders: updatedOrders };
     }
     
+    case 'SET_CUSTOMERS':
+      return {
+        ...state,
+        customers: action.customers,
+      };
+
     case 'ADD_CUSTOMER':
       return {
         ...state,
@@ -219,6 +231,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
       
       return { ...state, monthlyBills: updatedBills };
     }
+
+    case 'SET_LOADING':
+      return {
+        ...state,
+        isLoading: action.loading,
+      };
     
     default:
       return state;
@@ -228,13 +246,129 @@ function appReducer(state: AppState, action: AppAction): AppState {
 const AppContext = createContext<{
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
+  fetchCustomersFromSupabase: () => Promise<void>;
+  addCustomerToSupabase: (customer: Customer, adminEmail: string) => Promise<void>;
+  updateCustomerInSupabase: (customerId: string, updates: Partial<Customer>) => Promise<void>;
 } | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
+  // Fetch customers from Supabase when app loads
+  useEffect(() => {
+    fetchCustomersFromSupabase();
+  }, []);
+
+  const fetchCustomersFromSupabase = async () => {
+    try {
+      dispatch({ type: 'SET_LOADING', loading: true });
+      
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('registered_at', { ascending: false });
+
+      if (error) {
+        console.error('Supabase fetch error:', error);
+        throw error;
+      }
+
+      const customers: Customer[] = (data || []).map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        paymentType: row.payment_type as 'cash' | 'monthly',
+        monthlyBalance: parseFloat(row.monthly_balance) || 0,
+        totalSpent: parseFloat(row.total_spent) || 0,
+        isFirstLogin: row.is_first_login,
+        registeredAt: row.registered_at,
+      }));
+
+      dispatch({ type: 'SET_CUSTOMERS', customers });
+    } catch (error: any) {
+      console.error('Error fetching customers:', error.message);
+    } finally {
+      dispatch({ type: 'SET_LOADING', loading: false });
+    }
+  };
+
+  const addCustomerToSupabase = async (customer: Customer, adminEmail: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .insert({
+          clerk_user_id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          payment_type: customer.paymentType,
+          monthly_balance: 0,
+          total_spent: 0,
+          is_first_login: true,
+          created_by_admin_email: adminEmail,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw error;
+      }
+
+      const newCustomer: Customer = {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        paymentType: data.payment_type as 'cash' | 'monthly',
+        monthlyBalance: 0,
+        totalSpent: 0,
+        isFirstLogin: true,
+        registeredAt: data.registered_at,
+      };
+
+      dispatch({ type: 'ADD_CUSTOMER', customer: newCustomer });
+    } catch (error: any) {
+      console.error('Error adding customer:', error.message);
+      throw error;
+    }
+  };
+
+  const updateCustomerInSupabase = async (customerId: string, updates: Partial<Customer>) => {
+    try {
+      const updateData: any = {};
+      
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.paymentType !== undefined) updateData.payment_type = updates.paymentType;
+      if (updates.monthlyBalance !== undefined) updateData.monthly_balance = updates.monthlyBalance;
+      if (updates.totalSpent !== undefined) updateData.total_spent = updates.totalSpent;
+      if (updates.isFirstLogin !== undefined) updateData.is_first_login = updates.isFirstLogin;
+
+      const { error } = await supabase
+        .from('customers')
+        .update(updateData)
+        .eq('id', customerId);
+
+      if (error) {
+        console.error('Supabase update error:', error);
+        throw error;
+      }
+
+      dispatch({ type: 'UPDATE_CUSTOMER', customerId, updates });
+    } catch (error: any) {
+      console.error('Error updating customer:', error.message);
+      throw error;
+    }
+  };
+
   return (
-    <AppContext.Provider value={{ state, dispatch }}>
+    <AppContext.Provider 
+      value={{ 
+        state, 
+        dispatch,
+        fetchCustomersFromSupabase,
+        addCustomerToSupabase,
+        updateCustomerInSupabase,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
