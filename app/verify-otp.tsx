@@ -27,7 +27,7 @@ export default function VerifyOTPScreen() {
       console.log('========== OTP VERIFICATION START ==========');
       console.log('Email:', email);
       
-      // Get customer data first
+      // 🆕 CHANGE 1: Get customer data FIRST (including role)
       console.log('1. Fetching customer from Supabase...');
       const { data: customerData, error: dbError } = await supabase
         .from('customers')
@@ -43,6 +43,7 @@ export default function VerifyOTPScreen() {
       }
 
       console.log('✅ Customer found:', customerData.name);
+      console.log('✅ Customer role:', customerData.role); // 🆕 NEW: Log role
 
       // Verify with Clerk
       console.log('2. Attempting Clerk verification...');
@@ -50,11 +51,9 @@ export default function VerifyOTPScreen() {
         code,
       });
 
-      // Don't try to stringify - just check properties
       console.log('3. Verification completed');
       console.log('Status:', verificationResult?.status);
       console.log('Created User ID:', verificationResult?.createdUserId);
-      console.log('Created Session ID:', verificationResult?.createdSessionId);
 
       const status = verificationResult?.status;
       
@@ -62,7 +61,6 @@ export default function VerifyOTPScreen() {
       if (status === 'missing_requirements') {
         console.log('✅ Status is missing_requirements (normal for first signup)');
         console.log('Email verification successful, proceeding to password setup...');
-        // This is actually OK - email is verified, just needs password
         
       } else if (status === 'complete') {
         console.log('✅ Status is complete');
@@ -90,12 +88,14 @@ export default function VerifyOTPScreen() {
           });
       }
 
-      // Create customer object
+      // 🆕 CHANGE 2: Create customer object WITH role and customerNumber
       console.log('5. Creating customer object...');
       const customer: any = {
         id: customerData.id,
         name: customerData.name,
         email: customerData.email,
+        customerNumber: customerData.customer_number,  // 🆕 NEW
+        role: customerData.role || 'customer',         // 🆕 NEW: Include role!
         paymentType: customerData.payment_type,
         monthlyBalance: parseFloat(customerData.monthly_balance) || 0,
         totalSpent: parseFloat(customerData.total_spent) || 0,
@@ -103,20 +103,36 @@ export default function VerifyOTPScreen() {
         registeredAt: customerData.registered_at,
       };
 
-      console.log('6. Logging in customer...');
+      // 🆕 CHANGE 3: Determine userType based on role
+      console.log('6. Determining user type...');
+      let userType: 'customer' | 'receptionist' | 'admin' = 'customer';
+      if (customer.role === 'receptionist') {
+        userType = 'receptionist';
+        console.log('✅ User is RECEPTIONIST');
+      } else if (customer.role === 'admin') {
+        userType = 'admin';
+        console.log('✅ User is ADMIN');
+      } else {
+        console.log('✅ User is CUSTOMER');
+      }
+
+      console.log('7. Logging in user...');
       authDispatch({
         type: 'LOGIN',
-        userType: 'customer',
+        userType: userType,  // 🆕 NEW: Pass correct userType
         user: customer
       });
 
       setPendingEmail(email);
 
-      console.log('7. Navigating to password setup...');
+      console.log('8. Navigating to password setup...');
+      console.log('User role being passed:', customer.role);
       console.log('========== OTP VERIFICATION SUCCESS ==========');
       
       setIsVerifying(false);
-      router.replace('/set-password');
+      
+      // 🆕 CHANGE 4: Pass role to set-password screen
+      router.replace(`/set-password?role=${customer.role}`);
       
     } catch (err: any) {
       console.error('========== ERROR ==========');
@@ -139,10 +155,20 @@ export default function VerifyOTPScreen() {
             .single();
 
           if (fallbackCustomer) {
+            // 🆕 UPDATED: Include role in fallback
+            let fallbackUserType: 'customer' | 'receptionist' | 'admin' = 'customer';
+            if (fallbackCustomer.role === 'receptionist') {
+              fallbackUserType = 'receptionist';
+            } else if (fallbackCustomer.role === 'admin') {
+              fallbackUserType = 'admin';
+            }
+
             const customer: any = {
               id: fallbackCustomer.id,
               name: fallbackCustomer.name,
               email: fallbackCustomer.email,
+              customerNumber: fallbackCustomer.customer_number,
+              role: fallbackCustomer.role || 'customer',
               paymentType: fallbackCustomer.payment_type,
               monthlyBalance: parseFloat(fallbackCustomer.monthly_balance) || 0,
               totalSpent: parseFloat(fallbackCustomer.total_spent) || 0,
@@ -152,13 +178,13 @@ export default function VerifyOTPScreen() {
 
             authDispatch({
               type: 'LOGIN',
-              userType: 'customer',
+              userType: fallbackUserType,
               user: customer
             });
 
             setPendingEmail(email);
             setIsVerifying(false);
-            router.replace('/set-password');
+            router.replace(`/set-password?role=${customer.role}`);
             return;
           }
         } catch (recoveryError) {

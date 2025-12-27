@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, Image } from 'react-native';
-import { Plus, CreditCard as Edit, Trash2, Save, X } from 'lucide-react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, Image, ActivityIndicator } from 'react-native';
+import { Plus, CreditCard as Edit, Trash2, Save, X, Upload, Camera } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../../context/AppContext';
+import { uploadDishImage, deleteDishImage } from './../lib/supabase';
 import { Dish } from '../../types';
+import { formatCurrency, parseCurrencyInput } from '../../utils/currency';
 
 export default function AdminMenuScreen() {
-  const { state, dispatch } = useApp();
-  const { dishes } = state;
+  const { state, addDishToSupabase, updateDishInSupabase, deleteDishFromSupabase, fetchDishesFromSupabase } = useApp();
+  const { dishes, isLoading } = state;
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingDish, setEditingDish] = useState<Dish | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [dishForm, setDishForm] = useState({
     name: '',
     description: '',
@@ -32,32 +37,177 @@ export default function AdminMenuScreen() {
     });
   };
 
-  const handleAddDish = () => {
+  // Request camera permissions
+  const requestPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your photo library to upload images.');
+      return false;
+    }
+    return true;
+  };
+
+  // Pick image from gallery
+const pickImage = async () => {
+  const hasPermission = await requestPermissions();
+  if (!hasPermission) return;
+
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+      base64: false,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const localUri = result.assets[0].uri;
+      
+      console.log('Picked image:', localUri);
+      console.log('Image width:', result.assets[0].width);
+      console.log('Image height:', result.assets[0].height);
+      
+      // Show local image immediately
+      setDishForm(prev => ({ ...prev, image: localUri }));
+      setIsUploadingImage(true);
+      
+      // Upload to Supabase
+      const imageUrl = await uploadDishImage(localUri, dishForm.name || 'dish');
+
+      if (imageUrl) {
+        setDishForm(prev => ({ ...prev, image: imageUrl }));
+        Alert.alert('Success', 'Image uploaded successfully!');
+      } else {
+        setDishForm(prev => ({ ...prev, image: '' }));
+        Alert.alert('Error', 'Failed to upload image. Please try again.');
+      }
+      
+      setIsUploadingImage(false);
+    }
+  } catch (error) {
+    console.error('Error picking image:', error);
+    Alert.alert('Error', 'Failed to pick image.');
+    setIsUploadingImage(false);
+  }
+};
+
+  // Take photo with camera
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your camera to take photos.');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const localUri = result.assets[0].uri;
+        
+        // Show local image immediately for preview
+        setDishForm(prev => ({ ...prev, image: localUri }));
+        setIsUploadingImage(true);
+        
+        const imageUrl = await uploadDishImage(
+          localUri,
+          dishForm.name || 'dish'
+        );
+
+        if (imageUrl) {
+          // Replace local URI with Supabase URL
+          setDishForm(prev => ({ ...prev, image: imageUrl }));
+          Alert.alert('Success', 'Photo uploaded successfully!');
+        } else {
+          // Revert to empty if upload fails
+          setDishForm(prev => ({ ...prev, image: '' }));
+          Alert.alert('Error', 'Failed to upload photo. Please try again.');
+        }
+        
+        setIsUploadingImage(false);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo.');
+      setIsUploadingImage(false);
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      'Add Dish Image',
+      'Choose an option',
+      [
+        {
+          text: 'Take Photo',
+          onPress: takePhoto,
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: pickImage,
+        },
+        {
+          text: 'Enter URL',
+          onPress: () => {
+            Alert.prompt(
+              'Image URL',
+              'Enter the image URL',
+              (url) => {
+                if (url) {
+                  setDishForm(prev => ({ ...prev, image: url }));
+                }
+              }
+            );
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const handleAddDish = async () => {
     if (!dishForm.name || !dishForm.description || !dishForm.price) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    const price = parseFloat(dishForm.price);
+    const price = parseCurrencyInput(dishForm.price);
     if (isNaN(price) || price <= 0) {
       Alert.alert('Error', 'Please enter a valid price');
       return;
     }
 
-    const newDish: Dish = {
-      id: Date.now().toString(),
-      name: dishForm.name,
-      description: dishForm.description,
-      price: price,
-      image: dishForm.image || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300',
-      category: dishForm.category,
-      available: dishForm.available,
-    };
+    setIsSubmitting(true);
 
-    dispatch({ type: 'ADD_DISH', dish: newDish });
-    resetForm();
-    setShowAddModal(false);
-    Alert.alert('Success', 'Dish added successfully!');
+    try {
+      const newDish: Dish = {
+        id: Date.now().toString(),
+        name: dishForm.name,
+        description: dishForm.description,
+        price: price,
+        image: dishForm.image || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300',
+        category: dishForm.category,
+        available: dishForm.available,
+      };
+
+      await addDishToSupabase(newDish, 'admin@test.com');
+      
+      resetForm();
+      setShowAddModal(false);
+      Alert.alert('Success', 'Dish added successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add dish. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEditDish = (dish: Dish) => {
@@ -73,35 +223,44 @@ export default function AdminMenuScreen() {
     setShowAddModal(true);
   };
 
-  const handleUpdateDish = () => {
+  const handleUpdateDish = async () => {
     if (!editingDish || !dishForm.name || !dishForm.description || !dishForm.price) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    const price = parseFloat(dishForm.price);
+    const price = parseCurrencyInput(dishForm.price);
     if (isNaN(price) || price <= 0) {
       Alert.alert('Error', 'Please enter a valid price');
       return;
     }
 
-    const updates: Partial<Dish> = {
-      name: dishForm.name,
-      description: dishForm.description,
-      price: price,
-      image: dishForm.image,
-      category: dishForm.category,
-      available: dishForm.available,
-    };
+    setIsSubmitting(true);
 
-    dispatch({ type: 'UPDATE_DISH', dishId: editingDish.id, updates });
-    resetForm();
-    setEditingDish(null);
-    setShowAddModal(false);
-    Alert.alert('Success', 'Dish updated successfully!');
+    try {
+      const updates: Partial<Dish> = {
+        name: dishForm.name,
+        description: dishForm.description,
+        price: price,
+        image: dishForm.image,
+        category: dishForm.category,
+        available: dishForm.available,
+      };
+
+      await updateDishInSupabase(editingDish.id, updates);
+      
+      resetForm();
+      setEditingDish(null);
+      setShowAddModal(false);
+      Alert.alert('Success', 'Dish updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update dish. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteDish = (dishId: string) => {
+  const handleDeleteDish = (dish: Dish) => {
     Alert.alert(
       'Delete Dish',
       'Are you sure you want to delete this dish?',
@@ -110,20 +269,40 @@ export default function AdminMenuScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => dispatch({ type: 'DELETE_DISH', dishId }),
+          onPress: async () => {
+            try {
+              // Delete image from storage if it's from Supabase
+              if (dish.image.includes('supabase')) {
+                await deleteDishImage(dish.image);
+              }
+              
+              await deleteDishFromSupabase(dish.id);
+              Alert.alert('Success', 'Dish deleted successfully!');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete dish.');
+            }
+          },
         },
       ]
     );
   };
 
-  const toggleAvailability = (dishId: string, available: boolean) => {
-    dispatch({ type: 'UPDATE_DISH', dishId, updates: { available } });
+  const toggleAvailability = async (dishId: string, available: boolean) => {
+    try {
+      await updateDishInSupabase(dishId, { available });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update availability.');
+    }
   };
 
   const closeModal = () => {
     setShowAddModal(false);
     setEditingDish(null);
     resetForm();
+  };
+
+  const handleRefresh = async () => {
+    await fetchDishesFromSupabase();
   };
 
   return (
@@ -141,63 +320,77 @@ export default function AdminMenuScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {dishes.map((dish) => (
-          <View key={dish.id} style={styles.dishCard}>
-            <Image source={{ uri: dish.image }} style={styles.dishImage} />
-            <View style={styles.dishContent}>
-              <View style={styles.dishHeader}>
-                <View style={styles.dishInfo}>
-                  <Text style={styles.dishName}>{dish.name}</Text>
-                  <Text style={styles.dishCategory}>{dish.category}</Text>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Loading dishes...</Text>
+        </View>
+      ) : (
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {dishes.map((dish) => (
+            <View key={dish.id} style={styles.dishCard}>
+              <Image source={{ uri: dish.image }} style={styles.dishImage} />
+              <View style={styles.dishContent}>
+                <View style={styles.dishHeader}>
+                  <View style={styles.dishInfo}>
+                    <Text style={styles.dishName}>{dish.name}</Text>
+                    <Text style={styles.dishCategory}>{dish.category}</Text>
+                  </View>
+                  <Text style={styles.dishPrice}>{formatCurrency(dish.price)}</Text>
                 </View>
-                <Text style={styles.dishPrice}>${dish.price.toFixed(2)}</Text>
-              </View>
-              
-              <Text style={styles.dishDescription}>{dish.description}</Text>
-              
-              <View style={styles.dishActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.availabilityButton,
-                    { backgroundColor: dish.available ? '#D1FAE5' : '#FEE2E2' }
-                  ]}
-                  onPress={() => toggleAvailability(dish.id, !dish.available)}
-                >
-                  <Text style={[
-                    styles.availabilityText,
-                    { color: dish.available ? '#10B981' : '#EF4444' }
-                  ]}>
-                    {dish.available ? 'Available' : 'Unavailable'}
-                  </Text>
-                </TouchableOpacity>
                 
-                <View style={styles.actionButtons}>
+                <Text style={styles.dishDescription}>{dish.description}</Text>
+                
+                <View style={styles.dishActions}>
                   <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => handleEditDish(dish)}
+                    style={[
+                      styles.availabilityButton,
+                      { backgroundColor: dish.available ? '#D1FAE5' : '#FEE2E2' }
+                    ]}
+                    onPress={() => toggleAvailability(dish.id, !dish.available)}
                   >
-                    <Edit size={16} color="#F97316" strokeWidth={2} />
+                    <Text style={[
+                      styles.availabilityText,
+                      { color: dish.available ? '#10B981' : '#EF4444' }
+                    ]}>
+                      {dish.available ? 'Available' : 'Unavailable'}
+                    </Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteDish(dish.id)}
-                  >
-                    <Trash2 size={16} color="#EF4444" strokeWidth={2} />
-                  </TouchableOpacity>
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                      style={styles.editButton}
+                      onPress={() => handleEditDish(dish)}
+                    >
+                      <Edit size={16} color="#F97316" strokeWidth={2} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteDish(dish)}
+                    >
+                      <Trash2 size={16} color="#EF4444" strokeWidth={2} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
-        ))}
+          ))}
 
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+          {dishes.length === 0 && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No dishes yet</Text>
+              <Text style={styles.emptySubtext}>Add your first dish to get started</Text>
+            </View>
+          )}
+
+          <View style={styles.bottomPadding} />
+        </ScrollView>
+      )}
 
       {/* Add/Edit Dish Modal */}
       <Modal
@@ -218,11 +411,60 @@ export default function AdminMenuScreen() {
             </View>
             
             <ScrollView style={styles.modalForm}>
+              {/* Image Preview */}
+              {dishForm.image ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image 
+                    source={{ uri: dishForm.image }} 
+                    style={styles.imagePreview}
+                    resizeMode="cover"
+                  />
+                  {isUploadingImage && (
+                    <View style={styles.uploadingOverlay}>
+                      <ActivityIndicator size="large" color="#fff" />
+                      <Text style={styles.uploadingText}>Uploading...</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={styles.changeImageButton}
+                    onPress={showImageOptions}
+                    disabled={isUploadingImage}
+                  >
+                    <Upload size={16} color="#fff" strokeWidth={2} />
+                    <Text style={styles.changeImageText}>
+                      {isUploadingImage ? 'Uploading...' : 'Change Image'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={showImageOptions}
+                  disabled={isUploadingImage || isSubmitting}
+                >
+                  {isUploadingImage ? (
+                    <>
+                      <ActivityIndicator color="#10B981" size="large" />
+                      <Text style={styles.uploadButtonText}>Uploading...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={32} color="#10B981" strokeWidth={2} />
+                      <Text style={styles.uploadButtonText}>Add Dish Image</Text>
+                      <Text style={styles.uploadButtonSubtext}>
+                        Take photo or choose from gallery
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+
               <TextInput
                 style={styles.textInput}
                 placeholder="Dish Name *"
                 value={dishForm.name}
                 onChangeText={(text) => setDishForm(prev => ({ ...prev, name: text }))}
+                editable={!isSubmitting && !isUploadingImage}
               />
 
               <TextInput
@@ -232,22 +474,18 @@ export default function AdminMenuScreen() {
                 onChangeText={(text) => setDishForm(prev => ({ ...prev, description: text }))}
                 multiline
                 numberOfLines={3}
+                editable={!isSubmitting && !isUploadingImage}
               />
 
               <TextInput
                 style={styles.textInput}
-                placeholder="Price *"
+                placeholder="Price in UGX *"
                 value={dishForm.price}
                 onChangeText={(text) => setDishForm(prev => ({ ...prev, price: text }))}
-                keyboardType="decimal-pad"
+                keyboardType="numeric"
+                editable={!isSubmitting && !isUploadingImage}
               />
-
-              <TextInput
-                style={styles.textInput}
-                placeholder="Image URL (optional)"
-                value={dishForm.image}
-                onChangeText={(text) => setDishForm(prev => ({ ...prev, image: text }))}
-              />
+              <Text style={styles.inputHelper}>Enter price in UGX (e.g., 44400 for USh 44,400)</Text>
 
               <View style={styles.categoryContainer}>
                 <Text style={styles.categoryLabel}>Category:</Text>
@@ -260,6 +498,7 @@ export default function AdminMenuScreen() {
                         dishForm.category === category && styles.selectedCategory
                       ]}
                       onPress={() => setDishForm(prev => ({ ...prev, category }))}
+                      disabled={isSubmitting || isUploadingImage}
                     >
                       <Text style={[
                         styles.categoryButtonText,
@@ -281,6 +520,7 @@ export default function AdminMenuScreen() {
                       dishForm.available && styles.selectedAvailability
                     ]}
                     onPress={() => setDishForm(prev => ({ ...prev, available: true }))}
+                    disabled={isSubmitting || isUploadingImage}
                   >
                     <Text style={[
                       styles.availabilityToggleText,
@@ -296,6 +536,7 @@ export default function AdminMenuScreen() {
                       !dishForm.available && styles.selectedUnavailability
                     ]}
                     onPress={() => setDishForm(prev => ({ ...prev, available: false }))}
+                    disabled={isSubmitting || isUploadingImage}
                   >
                     <Text style={[
                       styles.availabilityToggleText,
@@ -312,18 +553,26 @@ export default function AdminMenuScreen() {
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={closeModal}
+                disabled={isSubmitting || isUploadingImage}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={styles.saveButton}
+                style={[styles.saveButton, (isSubmitting || isUploadingImage) && styles.disabledButton]}
                 onPress={editingDish ? handleUpdateDish : handleAddDish}
+                disabled={isSubmitting || isUploadingImage}
               >
-                <Save size={16} color="#fff" strokeWidth={2} />
-                <Text style={styles.saveButtonText}>
-                  {editingDish ? 'Update' : 'Add'} Dish
-                </Text>
+                {isSubmitting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Save size={16} color="#fff" strokeWidth={2} />
+                    <Text style={styles.saveButtonText}>
+                      {editingDish ? 'Update' : 'Add'} Dish
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -365,6 +614,16 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
   },
   scrollView: {
     flex: 1,
@@ -454,6 +713,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
   },
+  emptyState: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
   bottomPadding: {
     height: 20,
   },
@@ -470,7 +746,7 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -484,8 +760,71 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   modalForm: {
-    maxHeight: 400,
+    maxHeight: 450,
     marginBottom: 24,
+  },
+  uploadButton: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#10B981',
+    borderStyle: 'dashed',
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  uploadButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#10B981',
+    marginTop: 12,
+  },
+  uploadButtonSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  imagePreviewContainer: {
+    marginBottom: 16,
+    position: 'relative',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadingText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  changeImageButton: {
+    backgroundColor: '#10B981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  changeImageText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   textInput: {
     backgroundColor: '#F9FAFB',
@@ -501,6 +840,13 @@ const styles = StyleSheet.create({
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+  },
+  inputHelper: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: -12,
+    marginBottom: 16,
+    marginLeft: 4,
   },
   categoryContainer: {
     marginBottom: 16,
@@ -607,5 +953,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });

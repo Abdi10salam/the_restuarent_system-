@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChefHat, Shield, Users, Settings } from 'lucide-react-native';
+import { ChefHat, Shield, Users, UserCog } from 'lucide-react-native';
 
 export default function PortalSelectionScreen() {
   const router = useRouter();
 
-  const handlePortalSelect = (portal: 'customer' | 'admin') => {
+  const handlePortalSelect = (portal: 'customer' | 'staff') => {
     router.push(`/login?portal=${portal}`);
   };
 
@@ -19,6 +19,7 @@ export default function PortalSelectionScreen() {
       </View>
 
       <View style={styles.portalsContainer}>
+        {/* Customer Portal */}
         <TouchableOpacity
           style={[styles.portalCard, styles.customerCard]}
           onPress={() => handlePortalSelect('customer')}
@@ -38,22 +39,23 @@ export default function PortalSelectionScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* Staff Portal (Admin + Receptionist) */}
         <TouchableOpacity
-          style={[styles.portalCard, styles.adminCard]}
-          onPress={() => handlePortalSelect('admin')}
+          style={[styles.portalCard, styles.staffCard]}
+          onPress={() => handlePortalSelect('staff')}
         >
           <View style={styles.portalIcon}>
-            <Shield size={32} color="#10B981" strokeWidth={2} />
+            <UserCog size={32} color="#10B981" strokeWidth={2} />
           </View>
-          <Text style={styles.portalTitle}>Admin Portal</Text>
+          <Text style={styles.portalTitle}>Staff Portal</Text>
           <Text style={styles.portalDescription}>
-            Manage orders, approve payments, and oversee operations
+            For admins and receptionists to manage operations
           </Text>
           <View style={styles.portalFeatures}>
             <Text style={styles.featureText}>• Approve/reject orders</Text>
-            <Text style={styles.featureText}>• Manage menu items</Text>
-            <Text style={styles.featureText}>• View analytics</Text>
-            <Text style={styles.featureText}>• Handle billing</Text>
+            <Text style={styles.featureText}>• Search customers</Text>
+            <Text style={styles.featureText}>• Handle walk-in orders</Text>
+            <Text style={styles.featureText}>• Print receipts</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -63,10 +65,10 @@ export default function PortalSelectionScreen() {
           Demo Credentials:
         </Text>
         <Text style={styles.credentialsText}>
-          Customer: customer@test.com / password
+          Customer: customer@test.com | password
         </Text>
         <Text style={styles.credentialsText}>
-          Admin: admin@test.com / admin
+          Admin: admin@test.com | admin
         </Text>
       </View>
     </View>
@@ -115,7 +117,7 @@ const styles = StyleSheet.create({
   customerCard: {
     borderColor: '#F97316',
   },
-  adminCard: {
+  staffCard: {
     borderColor: '#10B981',
   },
   portalIcon: {

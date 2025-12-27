@@ -156,54 +156,81 @@ export default function LoginScreen() {
         }
 
         // Sign in with password
-        try {
-          const signInAttempt = await signIn?.create({
-            identifier: email,
-          });
+        // 🔥 REPLACE THIS SECTION IN login.tsx (around line 145-185)
+// This is the "returning user" section after password verification
 
-          if (signInAttempt?.status === 'needs_first_factor') {
-            const result = await signIn?.attemptFirstFactor({
-              strategy: 'password',
-              password: password,
-            });
+try {
+  const signInAttempt = await signIn?.create({
+    identifier: email,
+  });
 
-            if (result?.status === 'complete') {
-              await setActive?.({ session: result.createdSessionId });
+  if (signInAttempt?.status === 'needs_first_factor') {
+    const result = await signIn?.attemptFirstFactor({
+      strategy: 'password',
+      password: password,
+    });
 
-              const customer = {
-                id: existingCustomer.id,
-                name: existingCustomer.name,
-                email: existingCustomer.email,
-                paymentType: existingCustomer.payment_type,
-                monthlyBalance: parseFloat(existingCustomer.monthly_balance) || 0,
-                totalSpent: parseFloat(existingCustomer.total_spent) || 0,
-                isFirstLogin: false,
-                registeredAt: existingCustomer.registered_at,
-              };
+    if (result?.status === 'complete') {
+      await setActive?.({ session: result.createdSessionId });
 
-              authDispatch({
-                type: 'LOGIN',
-                userType: 'customer',
-                user: customer
-              });
+      // 🆕 FIX: Create customer object WITH role and customerNumber
+      const customer = {
+        id: existingCustomer.id,
+        name: existingCustomer.name,
+        email: existingCustomer.email,
+        customerNumber: existingCustomer.customer_number,      // 🆕 ADDED
+        role: existingCustomer.role || 'customer',             // 🆕 ADDED
+        paymentType: existingCustomer.payment_type,
+        monthlyBalance: parseFloat(existingCustomer.monthly_balance) || 0,
+        totalSpent: parseFloat(existingCustomer.total_spent) || 0,
+        isFirstLogin: false,
+        registeredAt: existingCustomer.registered_at,
+      };
 
-              router.replace('/(tabs)');
-            }
-          }
-        } catch (signInError: any) {
-          const errorCode = signInError.errors?.[0]?.code;
-          const errorMessage = signInError.errors?.[0]?.message || '';
+      // 🆕 FIX: Determine userType based on role from database
+      let userType: 'customer' | 'receptionist' | 'admin' = 'customer';
+      if (customer.role === 'receptionist') {
+        userType = 'receptionist';
+      } else if (customer.role === 'admin') {
+        userType = 'admin';
+      }
 
-          if (errorCode === 'form_password_incorrect') {
-            Alert.alert('Incorrect Password', 'The password you entered is incorrect.');
-          } else if (errorCode === 'form_identifier_not_found') {
-            Alert.alert('Error', 'Account not found in Clerk. Please contact admin.');
-          } else {
-            Alert.alert('Login Failed', errorMessage || 'Unable to sign in.');
-          }
-          setIsLoading(false);
-          return;
-        }
+      console.log('🔍 Login Debug:');
+      console.log('- User role from DB:', customer.role);
+      console.log('- Determined userType:', userType);
+
+      // 🆕 FIX: Dispatch with correct userType
+      authDispatch({
+        type: 'LOGIN',
+        userType: userType,  // 🆕 CHANGED from hardcoded 'customer'
+        user: customer
+      });
+
+      // 🆕 FIX: Route based on role
+      if (userType === 'receptionist') {
+        console.log('✅ Routing receptionist to dashboard');
+        router.replace('/(tabs)/reception-dashboard');
+      } else if (userType === 'admin') {
+        router.replace('/(admin)');
+      } else {
+        router.replace('/(tabs)');
+      }
+    }
+  }
+} catch (signInError: any) {
+  const errorCode = signInError.errors?.[0]?.code;
+  const errorMessage = signInError.errors?.[0]?.message || '';
+
+  if (errorCode === 'form_password_incorrect') {
+    Alert.alert('Incorrect Password', 'The password you entered is incorrect.');
+  } else if (errorCode === 'form_identifier_not_found') {
+    Alert.alert('Error', 'Account not found in Clerk. Please contact admin.');
+  } else {
+    Alert.alert('Login Failed', errorMessage || 'Unable to sign in.');
+  }
+  setIsLoading(false);
+  return;
+}
       } else {
         // Admin login
         if (!password) {

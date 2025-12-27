@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useSignUp, useClerk } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from "./lib/supabase";
-
+import { getPortalForRole } from './lib/auth-helpers';  // 🆕 NEW: Import helper
 
 export default function SetPasswordScreen() {
   const router = useRouter();
+  const { role } = useLocalSearchParams<{ role?: string }>();  // 🆕 NEW: Get role from URL
   const { state, setPassword } = useAuth();
   const { signUp } = useSignUp();
   const { setActive } = useClerk();
@@ -43,6 +44,10 @@ export default function SetPasswordScreen() {
     setIsLoading(true);
 
     try {
+      console.log('========== SET PASSWORD START ==========');
+      console.log('User role from URL:', role);
+      console.log('User role from state:', state.currentUser.role);
+      
       // Update password in Clerk
       await signUp?.update({
         password: password,
@@ -65,18 +70,45 @@ export default function SetPasswordScreen() {
       // Update local state
       setPassword(state.currentUser.id, password);
 
-      // Navigate to customer dashboard
-      router.replace('/(tabs)');
+      // 🆕 CHANGE: Determine destination based on role
+      const userRole = state.currentUser.role || role || 'customer';
+      console.log('Final user role:', userRole);
+      
+      const destination = getPortalForRole(userRole as any) as any;
+      console.log('Routing to:', destination);
+      console.log('========== SET PASSWORD SUCCESS ==========');
+
+      // Navigate based on role
+      setIsLoading(false);
+      
+      // 🆕 NEW: Show different success message based on role
+      Alert.alert(
+        'Success! 🎉',
+        userRole === 'receptionist' 
+          ? 'Your receptionist account is ready!' 
+          : 'Your account is ready!',
+        [
+          {
+            text: 'Continue',
+            onPress: () => {
+              router.replace(destination);
+            }
+          }
+        ]
+      );
+      
     } catch (err: any) {
       console.error('Set password error:', err);
       Alert.alert(
         'Error',
         err.errors?.[0]?.message || 'Failed to set password. Please try again.'
       );
-    } finally {
       setIsLoading(false);
     }
   };
+
+  // 🆕 NEW: Determine account type for display
+  const accountType = state.currentUser?.role === 'receptionist' ? 'Receptionist' : 'Customer';
 
   return (
     <View style={styles.container}>
@@ -86,7 +118,7 @@ export default function SetPasswordScreen() {
         </View>
         <Text style={styles.title}>Set Your Password</Text>
         <Text style={styles.subtitle}>
-          Welcome {state.currentUser?.name}! Please create a secure password for your account.
+          Welcome {state.currentUser?.name}! Please create a secure password for your {accountType.toLowerCase()} account.
         </Text>
       </View>
 
