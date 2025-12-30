@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Receipt, DollarSign, Calendar, FileText, LogOut } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
@@ -8,10 +8,22 @@ import { useAuth } from '../../context/AuthContext';
 export default function ProfileScreen() {
   const { state: appState } = useApp();
   const { state: authState, logout } = useAuth();
-  const router = useRouter();
+  const router = useRouter(); // Keep this import
   const { orders } = appState;
-  const user = authState.currentUser!;
+  
+  const user = authState.currentUser; 
 
+  if (!user) {
+    // This guard clause is ESSENTIAL and remains here
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#F97316" />
+        <Text style={{ marginTop: 10, color: '#6B7280' }}>Logging out...</Text>
+      </View>
+    );
+  }
+
+  // All code below this line is now safe because 'user' is guaranteed to exist.
   const userOrders = orders.filter(order => order.customerId === user.id);
   const completedOrders = userOrders.filter(order => order.status === 'approved');
   const monthlyOrders = completedOrders.filter(order => order.paymentType === 'monthly');
@@ -33,8 +45,10 @@ export default function ProfileScreen() {
   const invoice = generateMonthlyInvoice();
 
   const handleLogout = () => {
+    // ✅ RE-FIX: Call logout AND explicitly navigate.
+    // This provides immediate feedback for the on-screen button.
     logout();
-    router.replace('/portal-selection');
+    router.replace('/portal-selection'); 
   };
 
   return (
@@ -44,7 +58,9 @@ export default function ProfileScreen() {
           <Text style={styles.title}>Profile</Text>
           <Text style={styles.subtitle}>Welcome back, {user.name}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        
+        {/* The on-screen LogOut button MUST have an onPress handler */}
+        <TouchableOpacity style={styles.logoutIconWrapper} onPress={handleLogout}>
           <LogOut size={20} color="#6B7280" strokeWidth={2} />
         </TouchableOpacity>
       </View>
@@ -153,6 +169,20 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Added new style for the loading state
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  // Added wrapper style for the LogOut icon
+  logoutIconWrapper: {
+    padding: 8,
+  },
+  // Removed unused 'logoutButton' style
+  
+  // ... (All existing styles below here) ...
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
@@ -176,9 +206,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
-  },
-  logoutButton: {
-    padding: 8,
   },
   scrollView: {
     flex: 1,

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface CategoryFilterProps {
   categories: string[];
@@ -8,45 +9,42 @@ interface CategoryFilterProps {
 }
 
 export function CategoryFilter({ categories, selectedCategory, onSelectCategory }: CategoryFilterProps) {
+  const allCategories = ['All', ...categories];
+
   return (
     <View style={styles.container}>
-      <ScrollView 
-        horizontal 
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <TouchableOpacity
-          style={[
-            styles.categoryButton,
-            selectedCategory === 'All' && styles.selectedButton
-          ]}
-          onPress={() => onSelectCategory('All')}
-        >
-          <Text style={[
-            styles.categoryText,
-            selectedCategory === 'All' && styles.selectedText
-          ]}>
-            All
-          </Text>
-        </TouchableOpacity>
-        
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category}
-            style={[
-              styles.categoryButton,
-              selectedCategory === category && styles.selectedButton
-            ]}
-            onPress={() => onSelectCategory(category)}
-          >
-            <Text style={[
-              styles.categoryText,
-              selectedCategory === category && styles.selectedText
-            ]}>
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {allCategories.map((category) => {
+          const isSelected = selectedCategory === category;
+          
+          return (
+            <TouchableOpacity
+              key={category}
+              onPress={() => onSelectCategory(category)}
+              activeOpacity={0.7}
+              style={styles.categoryButton}
+            >
+              {isSelected ? (
+                <LinearGradient
+                  colors={['#F97316', '#EA580C']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.selectedGradient}
+                >
+                  <Text style={styles.selectedText}>{category}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.unselectedButton}>
+                  <Text style={styles.unselectedText}>{category}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -54,33 +52,46 @@ export function CategoryFilter({ categories, selectedCategory, onSelectCategory 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FEF3E2',
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(249, 115, 22, 0.1)',
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 12,
+    gap: 10,
   },
   categoryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderRadius: 24,
+    overflow: 'hidden',
   },
-  selectedButton: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
-  },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
+  selectedGradient: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   selectedText: {
     color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  unselectedButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(249, 115, 22, 0.2)',
+  },
+  unselectedText: {
+    color: '#F97316',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });

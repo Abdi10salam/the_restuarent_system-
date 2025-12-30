@@ -2,22 +2,51 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ChefHat, Mail, Lock, ArrowLeft } from 'lucide-react-native';
-import { useSignIn } from '@clerk/clerk-expo';
+import { useSignIn, useSignUp, useClerk } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from './lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { portal } = useLocalSearchParams<{ portal: 'customer' | 'admin' }>();
   const { signIn, setActive } = useSignIn();
+  const { signUp } = useSignUp();
+  const { signOut: clerkSignOut } = useClerk();
   const { login, dispatch: authDispatch } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [customerExists, setCustomerExists] = useState<boolean | null>(null);
+  const [isFirstLogin, setIsFirstLogin] = useState<boolean>(false);
 
   const isCustomer = portal === 'customer';
   const portalColor = isCustomer ? '#F97316' : '#10B981';
   const portalName = isCustomer ? 'Customer' : 'Admin';
+
+  const checkCustomerStatus = async (emailInput: string) => {
+    if (!emailInput.includes('@') || !emailInput.includes('.')) {
+      setCustomerExists(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('is_first_login, clerk_user_id')
+        .eq('email', emailInput)
+        .single();
+
+      if (data) {
+        setCustomerExists(true);
+        setIsFirstLogin(data.is_first_login || !data.clerk_user_id);
+      } else {
+        setCustomerExists(false);
+      }
+    } catch (err) {
+      setCustomerExists(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email) {
@@ -25,68 +54,185 @@ export default function LoginScreen() {
       return;
     }
 
+    if (!email.includes('@') || !email.includes('.')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
     setIsLoading(true);
+
+    // 🔥 Clear any existing Clerk session
+    try {
+      await clerkSignOut();
+      console.log('Cleared existing session');
+    } catch (clearError) {
+      console.log('No session to clear');
+    }
+
+    // Small delay to ensure session is cleared
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     try {
       if (isCustomer) {
-        // Try to sign in with Clerk to check if user exists
-        try {
-          const signInAttempt = await signIn?.create({
-            identifier: email,
-          });
+        const { data: existingCustomer, error: dbError } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('email', email)
+          .single();
 
-          // If user exists and needs password
-          if (signInAttempt?.status === 'needs_first_factor') {
-            if (!password) {
-              Alert.alert('Error', 'Please enter your password');
-              setIsLoading(false);
-              return;
-            }
+        if (dbError || !existingCustomer) {
+          Alert.alert(
+            'Account Not Found',
+            "This account doesn't exist. Contact your admin to register."
+          );
+          setIsLoading(false);
+          return;
+        }
 
-            // Try password login
-            const result = await signIn?.attemptFirstFactor({
-              strategy: 'password',
-              password: password,
+        // First time login - send OTP
+        if (existingCustomer.is_first_login || !existingCustomer.clerk_user_id) {
+          console.log('First time user - starting OTP flow');
+          
+          try {
+            const newSignUp = await signUp?.create({
+              emailAddress: email,
             });
 
-            if (result?.status === 'complete') {
-              await setActive?.({ session: result.createdSessionId });
+            console.log('Clerk signup created');
 
-              // Get user metadata
-              const metadata = (result as any).userData?.unsafeMetadata || {};
-              const customer = {
-                id: (result as any).createdUserId || email,
-                name: metadata.name || 'Customer',
-                email: email,
-                paymentType: metadata.paymentType || 'monthly',
-                monthlyBalance: metadata.monthlyBalance || 0,
-                totalSpent: metadata.totalSpent || 0,
-                isFirstLogin: false,
-                registeredAt: metadata.registeredAt || new Date().toISOString(),
-              };
+            await signUp?.prepareEmailAddressVerification({ 
+              strategy: 'email_code' 
+            });
 
-              authDispatch({
-                type: 'LOGIN',
-                userType: 'customer',
-                user: customer
-              });
+            console.log('OTP sent');
+            setIsLoading(false);
+            router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
+            return;
 
-              router.replace('/(tabs)');
+          } catch (signUpError: any) {
+            console.error('Signup error:', signUpError);
+            
+            const errorCode = signUpError.errors?.[0]?.code;
+            const errorMessage = signUpError.errors?.[0]?.message || '';
+
+            if (errorCode === 'form_identifier_exists' || errorMessage.includes('already exists')) {
+              console.log('User exists, trying to resend OTP');
+              
+              try {
+                if (signUp && signUp.emailAddress === email) {
+                  await signUp.prepareEmailAddressVerification({ 
+                    strategy: 'email_code' 
+                  });
+                  setIsLoading(false);
+                  router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
+                  return;
+                }
+              } catch (resendError) {
+                console.error('Resend failed:', resendError);
+              }
+              
+              Alert.alert(
+                'Account Exists',
+                'This account may already be verified. Try entering your password to login.',
+                [{ text: 'OK', onPress: () => {
+                  setIsFirstLogin(false);
+                  setIsLoading(false);
+                }}]
+              );
+              return;
             }
-          }
-        } catch (clerkError: any) {
-          // If user doesn't exist in Clerk, they need to be registered by admin
-          if (clerkError.errors?.[0]?.code === 'form_identifier_not_found') {
-            Alert.alert('Error', 'Email not found. Please contact the admin to register your account.');
-          } else if (clerkError.errors?.[0]?.code === 'form_password_incorrect') {
-            Alert.alert('Error', 'Incorrect password');
-          } else {
-            // First time user - redirect to OTP verification
-            (router.push as any)(`/verify-otp?email=${encodeURIComponent(email)}`);
+            
+            Alert.alert('Error', 'Unable to send verification code. Please try again.');
+            setIsLoading(false);
+            return;
           }
         }
+
+        // Returning user - need password
+        if (!password) {
+          Alert.alert('Password Required', 'Please enter your password to sign in.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Sign in with password
+        // 🔥 REPLACE THIS SECTION IN login.tsx (around line 145-185)
+// This is the "returning user" section after password verification
+
+try {
+  const signInAttempt = await signIn?.create({
+    identifier: email,
+  });
+
+  if (signInAttempt?.status === 'needs_first_factor') {
+    const result = await signIn?.attemptFirstFactor({
+      strategy: 'password',
+      password: password,
+    });
+
+    if (result?.status === 'complete') {
+      await setActive?.({ session: result.createdSessionId });
+
+      // 🆕 FIX: Create customer object WITH role and customerNumber
+      const customer = {
+        id: existingCustomer.id,
+        name: existingCustomer.name,
+        email: existingCustomer.email,
+        customerNumber: existingCustomer.customer_number,      // 🆕 ADDED
+        role: existingCustomer.role || 'customer',             // 🆕 ADDED
+        paymentType: existingCustomer.payment_type,
+        monthlyBalance: parseFloat(existingCustomer.monthly_balance) || 0,
+        totalSpent: parseFloat(existingCustomer.total_spent) || 0,
+        isFirstLogin: false,
+        registeredAt: existingCustomer.registered_at,
+      };
+
+      // 🆕 FIX: Determine userType based on role from database
+      let userType: 'customer' | 'receptionist' | 'admin' = 'customer';
+      if (customer.role === 'receptionist') {
+        userType = 'receptionist';
+      } else if (customer.role === 'admin') {
+        userType = 'admin';
+      }
+
+      console.log('🔍 Login Debug:');
+      console.log('- User role from DB:', customer.role);
+      console.log('- Determined userType:', userType);
+
+      // 🆕 FIX: Dispatch with correct userType
+      authDispatch({
+        type: 'LOGIN',
+        userType: userType,  // 🆕 CHANGED from hardcoded 'customer'
+        user: customer
+      });
+
+      // 🆕 FIX: Route based on role
+      if (userType === 'receptionist') {
+        console.log('✅ Routing receptionist to dashboard');
+        router.replace('/(tabs)/reception-dashboard');
+      } else if (userType === 'admin') {
+        router.replace('/(admin)');
       } else {
-        // Admin login (no Clerk)
+        router.replace('/(tabs)');
+      }
+    }
+  }
+} catch (signInError: any) {
+  const errorCode = signInError.errors?.[0]?.code;
+  const errorMessage = signInError.errors?.[0]?.message || '';
+
+  if (errorCode === 'form_password_incorrect') {
+    Alert.alert('Incorrect Password', 'The password you entered is incorrect.');
+  } else if (errorCode === 'form_identifier_not_found') {
+    Alert.alert('Error', 'Account not found in Clerk. Please contact admin.');
+  } else {
+    Alert.alert('Login Failed', errorMessage || 'Unable to sign in.');
+  }
+  setIsLoading(false);
+  return;
+}
+      } else {
+        // Admin login
         if (!password) {
           Alert.alert('Error', 'Please enter your password');
           setIsLoading(false);
@@ -103,7 +249,7 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      Alert.alert('Error', 'An error occurred during login. Please try again.');
+      Alert.alert('Error', 'An error occurred during login.');
     } finally {
       setIsLoading(false);
     }
@@ -149,7 +295,17 @@ export default function LoginScreen() {
             style={styles.input}
             placeholder="Email address"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (isCustomer) {
+                checkCustomerStatus(text);
+              }
+            }}
+            onBlur={() => {
+              if (isCustomer && email) {
+                checkCustomerStatus(email);
+              }
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -157,24 +313,32 @@ export default function LoginScreen() {
           />
         </View>
 
-        {isCustomer && (
-          <Text style={styles.helperText}>
-            First time? Enter your email only - you'll verify with OTP
+        {isCustomer && customerExists !== null && (
+          <Text style={[
+            styles.helperText,
+            customerExists === false && styles.errorText,
+            customerExists === true && styles.successText
+          ]}>
+            {customerExists === false && '⚠️ Account not found. Contact your admin.'}
+            {customerExists === true && isFirstLogin && '✅ Account found! You\'ll receive an OTP.'}
+            {customerExists === true && !isFirstLogin && '✅ Welcome back! Enter your password.'}
           </Text>
         )}
 
-        <View style={styles.inputContainer}>
-          <Lock size={20} color="#6B7280" strokeWidth={2} />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            editable={!isLoading}
-          />
-        </View>
+        {(!isCustomer || (isCustomer && customerExists && !isFirstLogin)) && (
+          <View style={styles.inputContainer}>
+            <Lock size={20} color="#6B7280" strokeWidth={2} />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!isLoading}
+            />
+          </View>
+        )}
 
         <TouchableOpacity
           style={[styles.loginButton, { backgroundColor: portalColor }, isLoading && styles.disabledButton]}
@@ -277,10 +441,15 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 13,
-    color: '#F97316',
     marginTop: -12,
     marginBottom: -8,
-    fontStyle: 'italic',
+    fontWeight: '500',
+  },
+  errorText: {
+    color: '#EF4444',
+  },
+  successText: {
+    color: '#10B981',
   },
   loginButton: {
     borderRadius: 12,

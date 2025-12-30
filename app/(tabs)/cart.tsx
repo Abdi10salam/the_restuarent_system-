@@ -1,14 +1,18 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { ShoppingBag, CreditCard, Calendar } from 'lucide-react-native';
 import { CartItem } from '../../components/CartItem';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { Order } from '../../types';
+import { formatCurrency } from '../../utils/currency';
 
 export default function CartScreen() {
-  const { state: appState, dispatch } = useApp();
+  const { state: appState, dispatch, placeOrderToSupabase } = useApp();
   const { state: authState } = useAuth();
   const { cart } = appState;
+  
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   const totalAmount = cart.reduce(
     (sum, item) => sum + item.dish.price * item.quantity,
@@ -23,7 +27,7 @@ export default function CartScreen() {
     dispatch({ type: 'REMOVE_FROM_CART', dishId });
   };
 
-  const handlePlaceOrder = (paymentType: 'cash' | 'monthly') => {
+  const handlePlaceOrder = async (paymentType: 'cash' | 'monthly') => {
     if (cart.length === 0) {
       Alert.alert('Empty Cart', 'Please add items to your cart before placing an order.');
       return;
@@ -34,19 +38,39 @@ export default function CartScreen() {
       return;
     }
 
-    dispatch({ 
-      type: 'PLACE_ORDER', 
-      customerId: authState.currentUser.id,
-      customerName: authState.currentUser.name,
-      customerEmail: authState.currentUser.email,
-      paymentType 
-    });
-    
-    const paymentMessage = paymentType === 'cash' 
-      ? 'Your order has been placed with cash payment. Please pay at the counter.'
-      : 'Your order has been added to your monthly bill.';
-    
-    Alert.alert('Order Placed', paymentMessage);
+    setIsPlacingOrder(true);
+
+    try {
+      // Create order object
+      const newOrder: Order = {
+        id: Date.now().toString(),
+        customerId: authState.currentUser.id,
+        customerName: authState.currentUser.name,
+        customerEmail: authState.currentUser.email,
+        items: [...cart],
+        totalAmount,
+        status: 'pending',
+        paymentType,
+        createdAt: new Date().toISOString(),
+      };
+
+      // 🔥 Save order to Supabase
+      await placeOrderToSupabase(newOrder);
+
+      // Clear local cart
+      dispatch({ type: 'CLEAR_CART' });
+
+      const paymentMessage = paymentType === 'cash' 
+        ? 'Your order has been placed with cash payment. Please pay at the counter.'
+        : 'Your order has been added to your monthly bill.';
+      
+      Alert.alert('Order Placed Successfully! 🎉', paymentMessage);
+    } catch (error) {
+      console.error('Error placing order:', error);
+      Alert.alert('Error', 'Failed to place order. Please try again.');
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   if (cart.length === 0) {
@@ -91,24 +115,38 @@ export default function CartScreen() {
       <View style={styles.footer}>
         <View style={styles.totalContainer}>
           <Text style={styles.totalLabel}>Total Amount</Text>
-          <Text style={styles.totalAmount}>${totalAmount.toFixed(2)}</Text>
+          <Text style={styles.totalAmount}>{formatCurrency(totalAmount)}</Text>
         </View>
         
         <View style={styles.paymentButtons}>
           <TouchableOpacity
-            style={[styles.paymentButton, styles.cashButton]}
+            style={[styles.paymentButton, styles.cashButton, isPlacingOrder && styles.disabledButton]}
             onPress={() => handlePlaceOrder('cash')}
+            disabled={isPlacingOrder}
           >
-            <CreditCard size={20} color="#fff" strokeWidth={2} />
-            <Text style={styles.cashButtonText}>Pay Cash</Text>
+            {isPlacingOrder ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <CreditCard size={20} color="#fff" strokeWidth={2} />
+                <Text style={styles.cashButtonText}>Pay Cash</Text>
+              </>
+            )}
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.paymentButton, styles.monthlyButton]}
+            style={[styles.paymentButton, styles.monthlyButton, isPlacingOrder && styles.disabledButton]}
             onPress={() => handlePlaceOrder('monthly')}
+            disabled={isPlacingOrder}
           >
-            <Calendar size={20} color="#10B981" strokeWidth={2} />
-            <Text style={styles.monthlyButtonText}>Monthly Bill</Text>
+            {isPlacingOrder ? (
+              <ActivityIndicator color="#10B981" size="small" />
+            ) : (
+              <>
+                <Calendar size={20} color="#10B981" strokeWidth={2} />
+                <Text style={styles.monthlyButtonText}>Monthly Bill</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -220,5 +258,8 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });

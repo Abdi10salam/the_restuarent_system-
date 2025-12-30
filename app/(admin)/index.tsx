@@ -4,6 +4,7 @@ import { ChartBar as BarChart3, DollarSign, Clock, CircleCheck as CheckCircle, L
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useRouter } from 'expo-router';
+import { formatCurrency } from '../../utils/currency';
 
 export default function AdminDashboardScreen() {
   const { state: authState, logout } = useAuth();
@@ -57,7 +58,7 @@ export default function AdminDashboardScreen() {
             
             <View style={styles.statCard}>
               <DollarSign size={24} color="#F97316" strokeWidth={2} />
-              <Text style={styles.statValue}>${totalRevenue.toFixed(0)}</Text>
+              <Text style={styles.statValue}>{formatCurrency(totalRevenue)}</Text>
               <Text style={styles.statLabel}>Total Revenue</Text>
             </View>
             
@@ -69,7 +70,7 @@ export default function AdminDashboardScreen() {
             
             <View style={styles.statCard}>
               <Receipt size={24} color="#06B6D4" strokeWidth={2} />
-              <Text style={styles.statValue}>${monthlyBilling.toFixed(0)}</Text>
+              <Text style={styles.statValue}>{formatCurrency(monthlyBilling)}</Text>
               <Text style={styles.statLabel}>Monthly Bills</Text>
             </View>
           </View>
@@ -101,7 +102,7 @@ export default function AdminDashboardScreen() {
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                     </Text>
                   </View>
-                  <Text style={styles.orderAmount}>${order.totalAmount.toFixed(2)}</Text>
+                  <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
                 </View>
                 <Text style={styles.customerInfo}>
                   Customer: {order.customerName} ({order.customerEmail})

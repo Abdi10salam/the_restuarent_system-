@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Shield, ArrowLeft, Mail } from 'lucide-react-native';
 import { useSignUp } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from './lib/supabase';
 
 export default function VerifyOTPScreen() {
   const router = useRouter();
@@ -23,49 +24,178 @@ export default function VerifyOTPScreen() {
     setIsVerifying(true);
 
     try {
-      // Verify the email with Clerk
-      const completeSignUp = await signUp?.attemptEmailAddressVerification({
+      console.log('========== OTP VERIFICATION START ==========');
+      console.log('Email:', email);
+      
+      // 🆕 CHANGE 1: Get customer data FIRST (including role)
+      console.log('1. Fetching customer from Supabase...');
+      const { data: customerData, error: dbError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (dbError || !customerData) {
+        console.error('❌ Customer not found in Supabase');
+        Alert.alert('Error', 'Customer data not found. Please contact admin.');
+        setIsVerifying(false);
+        return;
+      }
+
+      console.log('✅ Customer found:', customerData.name);
+      console.log('✅ Customer role:', customerData.role); // 🆕 NEW: Log role
+
+      // Verify with Clerk
+      console.log('2. Attempting Clerk verification...');
+      const verificationResult = await signUp?.attemptEmailAddressVerification({
         code,
       });
 
-      if (completeSignUp?.status === 'complete') {
-        // Get user metadata from Clerk
-        const metadata = signUp?.unsafeMetadata as any;
+      console.log('3. Verification completed');
+      console.log('Status:', verificationResult?.status);
+      console.log('Created User ID:', verificationResult?.createdUserId);
 
-        // Create customer object from Clerk metadata
-        const customer: any = {
-          id: completeSignUp.createdUserId,
-          name: metadata?.name || 'Customer',
-          email: email,
-          paymentType: metadata?.paymentType || 'monthly',
-          monthlyBalance: metadata?.monthlyBalance || 0,
-          totalSpent: metadata?.totalSpent || 0,
-          isFirstLogin: true,
-          registeredAt: metadata?.registeredAt || new Date().toISOString(),
-        };
-
-        // Log the customer in temporarily
-        authDispatch({
-          type: 'LOGIN',
-          userType: 'customer',
-          user: customer
-        });
-
-        // Store email for password setup
-        setPendingEmail(email);
-
-        // Redirect to set password - DON'T set active session yet
-        router.replace('/set-password');
+      const status = verificationResult?.status;
+      
+      // Handle missing_requirements status (password not set yet)
+      if (status === 'missing_requirements') {
+        console.log('✅ Status is missing_requirements (normal for first signup)');
+        console.log('Email verification successful, proceeding to password setup...');
+        
+      } else if (status === 'complete') {
+        console.log('✅ Status is complete');
+        
       } else {
-        Alert.alert('Error', 'Verification incomplete. Please try again.');
+        console.log(`❌ Unexpected status: ${status}`);
+        Alert.alert('Error', 'Verification failed. Please try again.');
+        setIsVerifying(false);
+        return;
       }
+
+      // Update Supabase with Clerk user ID (in background)
+      if (verificationResult?.createdUserId) {
+        console.log('4. Updating Clerk user ID in Supabase...');
+        supabase
+          .from('customers')
+          .update({ clerk_user_id: verificationResult.createdUserId })
+          .eq('email', email)
+          .then(({ error }) => {
+            if (error) {
+              console.error('Supabase update error:', error);
+            } else {
+              console.log('✅ Supabase updated');
+            }
+          });
+      }
+
+      // 🆕 CHANGE 2: Create customer object WITH role and customerNumber
+      console.log('5. Creating customer object...');
+      const customer: any = {
+        id: customerData.id,
+        name: customerData.name,
+        email: customerData.email,
+        customerNumber: customerData.customer_number,  // 🆕 NEW
+        role: customerData.role || 'customer',         // 🆕 NEW: Include role!
+        paymentType: customerData.payment_type,
+        monthlyBalance: parseFloat(customerData.monthly_balance) || 0,
+        totalSpent: parseFloat(customerData.total_spent) || 0,
+        isFirstLogin: customerData.is_first_login,
+        registeredAt: customerData.registered_at,
+      };
+
+      // 🆕 CHANGE 3: Determine userType based on role
+      console.log('6. Determining user type...');
+      let userType: 'customer' | 'receptionist' | 'admin' = 'customer';
+      if (customer.role === 'receptionist') {
+        userType = 'receptionist';
+        console.log('✅ User is RECEPTIONIST');
+      } else if (customer.role === 'admin') {
+        userType = 'admin';
+        console.log('✅ User is ADMIN');
+      } else {
+        console.log('✅ User is CUSTOMER');
+      }
+
+      console.log('7. Logging in user...');
+      authDispatch({
+        type: 'LOGIN',
+        userType: userType,  // 🆕 NEW: Pass correct userType
+        user: customer
+      });
+
+      setPendingEmail(email);
+
+      console.log('8. Navigating to password setup...');
+      console.log('User role being passed:', customer.role);
+      console.log('========== OTP VERIFICATION SUCCESS ==========');
+      
+      setIsVerifying(false);
+      
+      // 🆕 CHANGE 4: Pass role to set-password screen
+      router.replace(`/set-password?role=${customer.role}`);
+      
     } catch (err: any) {
-      console.error('OTP verification error:', err);
+      console.error('========== ERROR ==========');
+      console.error('Error message:', err.message);
+      console.error('Error code:', err.errors?.[0]?.code);
+      
+      const errorMessage = err.errors?.[0]?.message || '';
+      const errorCode = err.errors?.[0]?.code || '';
+      
+      // Handle already verified case
+      if (errorMessage.includes('already been verified') || 
+          errorCode === 'verification_already_verified') {
+        console.log('Already verified, proceeding to password setup...');
+        
+        try {
+          const { data: fallbackCustomer } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('email', email)
+            .single();
+
+          if (fallbackCustomer) {
+            // 🆕 UPDATED: Include role in fallback
+            let fallbackUserType: 'customer' | 'receptionist' | 'admin' = 'customer';
+            if (fallbackCustomer.role === 'receptionist') {
+              fallbackUserType = 'receptionist';
+            } else if (fallbackCustomer.role === 'admin') {
+              fallbackUserType = 'admin';
+            }
+
+            const customer: any = {
+              id: fallbackCustomer.id,
+              name: fallbackCustomer.name,
+              email: fallbackCustomer.email,
+              customerNumber: fallbackCustomer.customer_number,
+              role: fallbackCustomer.role || 'customer',
+              paymentType: fallbackCustomer.payment_type,
+              monthlyBalance: parseFloat(fallbackCustomer.monthly_balance) || 0,
+              totalSpent: parseFloat(fallbackCustomer.total_spent) || 0,
+              isFirstLogin: fallbackCustomer.is_first_login,
+              registeredAt: fallbackCustomer.registered_at,
+            };
+
+            authDispatch({
+              type: 'LOGIN',
+              userType: fallbackUserType,
+              user: customer
+            });
+
+            setPendingEmail(email);
+            setIsVerifying(false);
+            router.replace(`/set-password?role=${customer.role}`);
+            return;
+          }
+        } catch (recoveryError) {
+          console.error('Recovery failed:', recoveryError);
+        }
+      }
+
       Alert.alert(
         'Verification Failed',
-        err.errors?.[0]?.message || 'Invalid verification code. Please try again.'
+        errorMessage || 'Invalid verification code. Please try again.'
       );
-    } finally {
       setIsVerifying(false);
     }
   };
@@ -75,6 +205,7 @@ export default function VerifyOTPScreen() {
       await signUp?.prepareEmailAddressVerification({ strategy: 'email_code' });
       Alert.alert('Success', 'A new verification code has been sent to your email');
     } catch (err: any) {
+      console.error('Resend error:', err);
       Alert.alert('Error', 'Failed to resend code. Please try again.');
     }
   };
@@ -200,7 +331,6 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: 20,
-
     marginBottom: 24,
   },
   codeInputContainer: {
