@@ -84,8 +84,8 @@ export default function MenuScreen() {
       
       // Navigate to checkout with context
       Alert.alert(
-        'Checkout',
-        `Ready to place order for ${isWalkIn ? 'walk-in customer' : customerName}?`,
+        'Confirm Order',
+        `Place order for ${isWalkIn ? 'walk-in customer' : customerName}?\n\n✅ Order will be approved immediately.`, // 🆕 CHANGED: Updated message
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -119,9 +119,10 @@ export default function MenuScreen() {
       customerEmail: isWalkIn ? 'walk-in@restaurant.local' : customerEmail,
       items: receptionistCart,
       totalAmount,
-      status: isWalkIn ? 'approved' : 'pending', // Auto-approve walk-ins
+      status: 'approved', // 🆕 CHANGED: Auto-approve ALL receptionist orders
       paymentType: isWalkIn ? 'cash' : paymentType,
       createdAt: new Date().toISOString(),
+      approvedAt: new Date().toISOString(), // 🆕 NEW: Set approval timestamp
       placedBy: authState.currentUser?.id,
       placedByName: authState.currentUser?.name,
       isWalkIn: isWalkIn,
@@ -134,7 +135,7 @@ export default function MenuScreen() {
         'Success! ✅',
         isWalkIn 
           ? 'Walk-in order placed and approved!'
-          : `Order placed for ${customerName}. Awaiting approval.`,
+          : `Order placed and approved for ${customerName}!`, // 🆕 CHANGED: Updated message
         [
           {
             text: 'OK',
