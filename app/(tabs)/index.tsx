@@ -10,6 +10,7 @@ import { useAuth } from "../../context/AuthContext"
 import { useRouter, useLocalSearchParams } from "expo-router"
 import { LinearGradient } from "expo-linear-gradient"
 import { formatCurrency } from "../../utils/currency"
+import { WALK_IN_CUSTOMER_ID, ensureWalkInCustomerExists } from "../lib/walkin-customer"  // 🆕 NEW
 
 export default function MenuScreen() {
   const router = useRouter()

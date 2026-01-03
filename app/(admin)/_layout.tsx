@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { ChartBar as BarChart3, ClipboardList, Users, ChefHat } from 'lucide-react-native';
+import { ChartBar as BarChart3, ClipboardList, Users, ChefHat, Receipt } from 'lucide-react-native';
 import { AppProvider } from '../../context/AppContext';
 
 export default function AdminTabLayout() {
@@ -62,6 +62,17 @@ export default function AdminTabLayout() {
             ),
           }}
         />
+
+        // In your admin layout tabs, add:
+<Tabs.Screen
+  name="monthly-bills"
+  options={{
+    title: 'Monthly Bills',
+    tabBarIcon: ({ size, color }) => (
+      <Receipt size={size} color={color} strokeWidth={2} />
+    ),
+  }}
+/>
       </Tabs>
     </AppProvider>
   );

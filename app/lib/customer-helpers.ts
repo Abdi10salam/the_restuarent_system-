@@ -124,7 +124,9 @@ export async function searchCustomers(searchTerm: string): Promise<Customer[]> {
  * @param customerNumber - The number to format
  * @returns Formatted string (e.g., "Customer #42")
  */
+// In customer-helpers.ts
 export function formatCustomerNumber(customerNumber: number): string {
+  if (customerNumber === -1) return '#WALK-IN';
   return `#${customerNumber}`;
 }
 
