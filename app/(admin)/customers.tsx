@@ -1,6 +1,7 @@
+// app/(admin)/customers.tsx - COMPLETE UPDATED VERSION
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator } from 'react-native';
-import { Users, DollarSign, Receipt, Plus, Mail, User, CreditCard, Clock, UserCog } from 'lucide-react-native';
+import { Users, DollarSign, Receipt, Plus, Mail, User, CreditCard, Clock, UserCog, X } from 'lucide-react-native';
 import { useSignUp } from '@clerk/clerk-expo';
 import { useApp } from '../../context/AppContext';
 import { Customer } from '../../types';
@@ -12,11 +13,12 @@ export default function AdminCustomersScreen() {
   const { signUp } = useSignUp();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showStaffOrders, setShowStaffOrders] = useState<string | null>(null); // 🆕 NEW
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     email: '',
-    role: 'customer' as 'customer' | 'receptionist',  // 🆕 NEW
+    role: 'customer' as 'customer' | 'receptionist',
     paymentType: 'monthly' as 'cash' | 'monthly'
   });
 
@@ -44,8 +46,8 @@ export default function AdminCustomersScreen() {
         id: Date.now().toString(),
         name: newCustomer.name,
         email: newCustomer.email,
-        customerNumber: 0, // Will be auto-generated
-        role: newCustomer.role,  // 🆕 Use selected role
+        customerNumber: 0,
+        role: newCustomer.role,
         paymentType: newCustomer.paymentType,
         monthlyBalance: 0,
         totalSpent: 0,
@@ -58,7 +60,6 @@ export default function AdminCustomersScreen() {
       setNewCustomer({ name: '', email: '', role: 'customer', paymentType: 'monthly' });
       setShowAddModal(false);
 
-      // 🆕 Show role in success message
       Alert.alert(
         'Success',
         `${newCustomer.role === 'receptionist' ? 'Receptionist' : 'Customer'} registered!\nAccount Number: ${customerNumber}\nThey can now login with ${newCustomer.email}`,
@@ -86,12 +87,32 @@ export default function AdminCustomersScreen() {
     Alert.alert('Success', 'Monthly bill generated successfully!');
   };
 
+  // Get customer order statistics
   const getCustomerStats = (customerId: string) => {
     const customerOrders = orders.filter(order => order.customerId === customerId);
     const completedOrders = customerOrders.filter(order => order.status === 'approved');
     return {
       totalOrders: completedOrders.length,
       pendingOrders: customerOrders.filter(order => order.status === 'pending').length,
+      revenue: completedOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+    };
+  };
+
+  // 🆕 NEW: Get staff order statistics
+  const getStaffStats = (staffId: string) => {
+    const staffOrders = orders.filter(order => order.placedBy === staffId);
+    return {
+      totalOrders: staffOrders.length,
+      pendingOrders: staffOrders.filter(o => o.status === 'pending').length,
+      walkInOrders: staffOrders.filter(o => o.isWalkIn).length,
+      customerOrders: staffOrders.filter(o => !o.isWalkIn).length,
+      approvedOrders: staffOrders.filter(o => o.status === 'approved').length,
+      revenue: staffOrders
+        .filter(o => o.status === 'approved')
+        .reduce((sum, o) => sum + o.totalAmount, 0),
+      orders: staffOrders.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ),
     };
   };
 
@@ -118,16 +139,22 @@ export default function AdminCustomersScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {customers.map((customer) => {
-          const stats = getCustomerStats(customer.id);
           const isReceptionist = customer.role === 'receptionist';
+          const stats = isReceptionist 
+            ? getStaffStats(customer.id)  // 🆕 Get staff stats
+            : getCustomerStats(customer.id);
           
           return (
-            <View key={customer.id} style={styles.customerCard}>
+            <TouchableOpacity
+              key={customer.id}
+              style={styles.customerCard}
+              onPress={() => isReceptionist && setShowStaffOrders(customer.id)}  // 🆕 Click to view orders
+              activeOpacity={isReceptionist ? 0.7 : 1}
+            >
               <View style={styles.customerHeader}>
                 <View style={styles.customerInfo}>
                   <View style={styles.nameRow}>
                     <Text style={styles.customerName}>{customer.name}</Text>
-                    {/* 🆕 Show role badge */}
                     {isReceptionist && (
                       <View style={styles.receptionistBadge}>
                         <UserCog size={12} color="#fff" strokeWidth={2} />
@@ -151,24 +178,40 @@ export default function AdminCustomersScreen() {
                     )}
                   </View>
                 </View>
-                {!isReceptionist && (
-                  <View style={styles.customerStats}>
-                    <View style={styles.statItem}>
-                      <Receipt size={16} color="#F97316" strokeWidth={2} />
-                      <Text style={styles.statText}>{stats.totalOrders} orders</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                      <DollarSign size={16} color="#10B981" strokeWidth={2} />
-                      <Text style={styles.statText}>{formatCurrency(customer.totalSpent)} spent</Text>
-                    </View>
-                    {stats.pendingOrders > 0 && (
+                {/* 🆕 Show stats for both staff and customers */}
+                <View style={styles.customerStats}>
+                  {isReceptionist ? (
+                    // Staff stats
+                    <>
                       <View style={styles.statItem}>
-                        <Clock size={16} color="#F59E0B" strokeWidth={2} />
-                        <Text style={styles.statText}>{stats.pendingOrders} pending</Text>
+                        <Receipt size={16} color="#10B981" strokeWidth={2} />
+                        <Text style={styles.statText}>{stats.totalOrders} orders</Text>
                       </View>
-                    )}
-                  </View>
-                )}
+                      <View style={styles.statItem}>
+                        <DollarSign size={16} color="#F97316" strokeWidth={2} />
+                        <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    // Customer stats
+                    <>
+                      <View style={styles.statItem}>
+                        <Receipt size={16} color="#F97316" strokeWidth={2} />
+                        <Text style={styles.statText}>{stats.totalOrders} orders</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <DollarSign size={16} color="#10B981" strokeWidth={2} />
+                        <Text style={styles.statText}>{formatCurrency(customer.totalSpent)} spent</Text>
+                      </View>
+                      {stats.pendingOrders > 0 && (
+                        <View style={styles.statItem}>
+                          <Clock size={16} color="#F59E0B" strokeWidth={2} />
+                          <Text style={styles.statText}>{stats.pendingOrders} pending</Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
               </View>
 
               {!isReceptionist && customer.monthlyBalance > 0 && (
@@ -185,7 +228,7 @@ export default function AdminCustomersScreen() {
                   </TouchableOpacity>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           );
         })}
 
@@ -200,6 +243,7 @@ export default function AdminCustomersScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
+      {/* Register User Modal */}
       <Modal
         visible={showAddModal}
         transparent
@@ -238,7 +282,6 @@ export default function AdminCustomersScreen() {
                 />
               </View>
 
-              {/* 🆕 NEW: Role Selector */}
               <View style={styles.roleTypeContainer}>
                 <Text style={styles.roleTypeLabel}>Account Type:</Text>
                 <View style={styles.roleTypeButtons}>
@@ -278,7 +321,6 @@ export default function AdminCustomersScreen() {
                 </View>
               </View>
 
-              {/* Only show payment type for customers, not receptionists */}
               {newCustomer.role === 'customer' && (
                 <View style={styles.paymentTypeContainer}>
                   <Text style={styles.paymentTypeLabel}>Payment Type:</Text>
@@ -344,6 +386,122 @@ export default function AdminCustomersScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🆕 NEW: Staff Orders Modal */}
+      <Modal
+        visible={!!showStaffOrders}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowStaffOrders(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            {showStaffOrders && (() => {
+              const staff = customers.find(c => c.id === showStaffOrders);
+              const staffStats = getStaffStats(showStaffOrders);
+              
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <View>
+                      <Text style={styles.modalTitle}>{staff?.name}'s Orders</Text>
+                      <Text style={styles.modalDescription}>
+                        Orders placed by this staff member
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setShowStaffOrders(null)}>
+                      <X size={24} color="#6B7280" strokeWidth={2} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Staff Statistics */}
+                  <View style={styles.staffStatsContainer}>
+                    <View style={styles.staffStatCard}>
+                      <Receipt size={20} color="#10B981" strokeWidth={2} />
+                      <Text style={styles.staffStatValue}>{staffStats.totalOrders}</Text>
+                      <Text style={styles.staffStatLabel}>Total Orders</Text>
+                    </View>
+                    <View style={styles.staffStatCard}>
+                      <User size={20} color="#3B82F6" strokeWidth={2} />
+                      <Text style={styles.staffStatValue}>{staffStats.walkInOrders}</Text>
+                      <Text style={styles.staffStatLabel}>Walk-in</Text>
+                    </View>
+                    <View style={styles.staffStatCard}>
+                      <Users size={20} color="#8B5CF6" strokeWidth={2} />
+                      <Text style={styles.staffStatValue}>{staffStats.customerOrders}</Text>
+                      <Text style={styles.staffStatLabel}>For Customers</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.revenueCard}>
+                    <DollarSign size={24} color="#F97316" strokeWidth={2} />
+                    <View style={styles.revenueInfo}>
+                      <Text style={styles.revenueLabel}>Total Revenue</Text>
+                      <Text style={styles.revenueAmount}>
+                        {formatCurrency(staffStats.revenue)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Orders List */}
+                  <ScrollView style={styles.staffOrdersList}>
+                    <Text style={styles.orderListTitle}>Order History</Text>
+                    {staffStats.orders.length === 0 ? (
+                      <Text style={styles.noOrdersText}>No orders placed yet</Text>
+                    ) : (
+                      staffStats.orders.map((order) => (
+                        <View key={order.id} style={styles.staffOrderItem}>
+                          <View style={styles.staffOrderHeader}>
+                            <Text style={styles.staffOrderId}>#{order.id.slice(-6)}</Text>
+                            {order.isWalkIn && (
+                              <View style={styles.walkInBadge}>
+                                <Text style={styles.walkInText}>Walk-in</Text>
+                              </View>
+                            )}
+                            <View style={[
+                              styles.statusBadge,
+                              {
+                                backgroundColor:
+                                  order.status === 'pending' ? '#FEF3C7' :
+                                  order.status === 'approved' ? '#D1FAE5' : '#FEE2E2'
+                              }
+                            ]}>
+                              <Text style={[
+                                styles.statusText,
+                                {
+                                  color:
+                                    order.status === 'pending' ? '#F59E0B' :
+                                    order.status === 'approved' ? '#10B981' : '#EF4444'
+                                }
+                              ]}>
+                                {order.status}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.staffOrderCustomer}>{order.customerName}</Text>
+                          <View style={styles.staffOrderFooter}>
+                            <Text style={styles.staffOrderDate}>
+                              {new Date(order.createdAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </Text>
+                            <Text style={styles.staffOrderAmount}>
+                              {formatCurrency(order.totalAmount)}
+                            </Text>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </ScrollView>
+                </>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -550,18 +708,21 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 4,
   },
   modalDescription: {
     fontSize: 14,
     color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 20,
   },
   modalForm: {
     gap: 16,
@@ -678,12 +839,153 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     alignItems: 'center',
   },
+
   addCustomerButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
   },
+
   disabledButton: {
     opacity: 0.6,
+  },
+
+  // NEW: Staff orders modal styles
+  staffStatsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  staffStatCard: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+
+  staffStatValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 4,
+  },
+
+  staffStatLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+
+  revenueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3E2',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+
+  revenueInfo: {
+    marginLeft: 12,
+  },
+
+  revenueLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+
+  revenueAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#F97316',
+  },
+
+  staffOrdersList: {
+    maxHeight: 300,
+  },
+
+  orderListTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+
+  noOrdersText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    paddingVertical: 32,
+  },
+
+  staffOrderItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+
+  staffOrderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+
+  staffOrderId: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+
+  walkInBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+
+  walkInText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#F59E0B',
+  },
+
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'capitalize',
+  },
+
+  staffOrderCustomer: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginBottom: 6,
+  },
+
+  staffOrderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  staffOrderDate: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+
+  staffOrderAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#10B981',
   },
 });

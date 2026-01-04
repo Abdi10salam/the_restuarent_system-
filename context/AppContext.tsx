@@ -2,6 +2,8 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 import { CartItem, Order, Dish, Customer, MonthlyBill } from '../types';
 import { supabase } from "../app/lib/supabase";
 import { generateCustomerNumber } from '../app/lib/customer-helpers';
+import { ensureWalkInCustomerExists } from '../app/lib/walkin-customer';
+
 
 interface AppState {
   cart: CartItem[];
@@ -240,10 +242,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   useEffect(() => {
-    fetchCustomersFromSupabase();
-    fetchDishesFromSupabase();
-    fetchOrdersFromSupabase();
+    // 🆕 Initialize app data including walk-in customer
+    initializeApp();
   }, []);
+  // 🆕 NEW: Initialization function
+  const initializeApp = async () => {
+    try {
+      console.log('🚀 Initializing app...');
+      
+      // Step 1: Ensure walk-in customer exists (critical!)
+      await ensureWalkInCustomerExists();
+      
+      // Step 2: Fetch all data
+      await Promise.all([
+        fetchCustomersFromSupabase(),
+        fetchDishesFromSupabase(),
+        fetchOrdersFromSupabase(),
+      ]);
+      
+      console.log('✅ App initialized successfully');
+    } catch (error) {
+      console.error('❌ App initialization failed:', error);
+    }
+  };
 
   // ========== CUSTOMER FUNCTIONS ==========
  // ========== UPDATED: CUSTOMER FUNCTIONS ==========
