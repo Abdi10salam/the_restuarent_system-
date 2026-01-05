@@ -25,15 +25,8 @@ export default function AdminDashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Admin Dashboard</Text>
-          <Text style={styles.subtitle}>Welcome back, {authState.currentUser?.name}</Text>
-        </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <LogOut size={20} color="#6B7280" strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
+      
+      
 
       <ScrollView 
         style={styles.scrollView}
@@ -42,7 +35,7 @@ export default function AdminDashboardScreen() {
       >
         {/* Stats Overview */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Overview</Text>
+         
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Clock size={24} color="#F59E0B" strokeWidth={2} />

@@ -23,8 +23,10 @@ export interface Customer {
   id: string;
   name: string;
   email: string;
-  customerNumber: number;        // 🆕 NEW: Auto-generated number (10, 11, 12...)
-  role: UserRole;                // 🆕 NEW: Role for access control
+  phone?: string; // 🆕 NEW - Optional phone number
+  profilePhoto?: string; // 🆕 NEW - Optional profile photo URL
+  customerNumber: number;
+  role: UserRole;
   paymentType: 'cash' | 'monthly';
   monthlyBalance: number;
   totalSpent: number;
