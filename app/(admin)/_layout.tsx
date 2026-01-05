@@ -1,14 +1,27 @@
+// app/(admin)/_layout.tsx - FINAL VERSION
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { ChartBar as BarChart3, ClipboardList, Users, ChefHat, Receipt } from 'lucide-react-native';
+import { ChartBar as BarChart3, ClipboardList, ChefHat } from 'lucide-react-native';
 import { AppProvider } from '../../context/AppContext';
+import DrawerButton from '../../components/DrawerButton';
 
 export default function AdminTabLayout() {
   return (
     <AppProvider>
       <Tabs
         screenOptions={{
-          headerShown: false,
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: '#fff',
+            elevation: 2,
+            shadowOpacity: 0.1,
+          },
+          headerTitleStyle: {
+            fontWeight: 'bold',
+            fontSize: 18,
+            color: '#1F2937',
+          },
+          headerLeft: () => <DrawerButton />,
           tabBarStyle: {
             backgroundColor: '#fff',
             borderTopColor: '#E5E7EB',
@@ -35,6 +48,7 @@ export default function AdminTabLayout() {
             ),
           }}
         />
+        
         <Tabs.Screen
           name="orders"
           options={{
@@ -44,15 +58,7 @@ export default function AdminTabLayout() {
             ),
           }}
         />
-        <Tabs.Screen
-          name="customers"
-          options={{
-            title: 'Customers',
-            tabBarIcon: ({ size, color }) => (
-              <Users size={size} color={color} strokeWidth={2} />
-            ),
-          }}
-        />
+        
         <Tabs.Screen
           name="menu"
           options={{
@@ -63,16 +69,27 @@ export default function AdminTabLayout() {
           }}
         />
 
-        // In your admin layout tabs, add:
-<Tabs.Screen
-  name="monthly-bills"
-  options={{
-    title: 'Monthly Bills',
-    tabBarIcon: ({ size, color }) => (
-      <Receipt size={size} color={color} strokeWidth={2} />
-    ),
-  }}
-/>
+        {/* Hide these from tabs - accessible via drawer */}
+        <Tabs.Screen
+          name="customers"
+          options={{
+            href: null,
+          }}
+        />
+        
+        <Tabs.Screen
+          name="monthly-bills"
+          options={{
+            href: null,
+          }}
+        />
+        
+        <Tabs.Screen
+          name="settings"
+          options={{
+            href: null,
+          }}
+        />
       </Tabs>
     </AppProvider>
   );
