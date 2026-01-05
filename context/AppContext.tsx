@@ -278,17 +278,21 @@ const fetchCustomersFromSupabase = async () => {
 
     if (error) throw error;
 
-    const customers: Customer[] = (data || []).map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      email: row.email,
-      customerNumber: row.customer_number,      // 🆕 NEW
-      role: row.role || 'customer',             // 🆕 NEW
-      paymentType: row.payment_type,
-      monthlyBalance: parseFloat(row.monthly_balance) || 0,
-      totalSpent: parseFloat(row.total_spent) || 0,
-      isFirstLogin: row.is_first_login,
-      registeredAt: row.registered_at,
+    const customers: Customer[] = (data || []).map((dbCustomer: any) => ({
+      id: dbCustomer.id,
+      name: dbCustomer.name,
+      email: dbCustomer.email,
+
+      phone: dbCustomer.phone,                    // ✅ FIX
+      profilePhoto: dbCustomer.profile_photo,     // ✅ FIX
+
+      customerNumber: dbCustomer.customer_number,
+      role: dbCustomer.role || 'customer',
+      paymentType: dbCustomer.payment_type,
+      monthlyBalance: parseFloat(dbCustomer.monthly_balance) || 0,
+      totalSpent: parseFloat(dbCustomer.total_spent) || 0,
+      isFirstLogin: dbCustomer.is_first_login,
+      registeredAt: dbCustomer.registered_at,
     }));
 
     dispatch({ type: 'SET_CUSTOMERS', customers });
@@ -297,9 +301,9 @@ const fetchCustomersFromSupabase = async () => {
   }
 };
 
+
 const addCustomerToSupabase = async (customer: Customer, adminEmail: string) => {
   try {
-    // 🆕 Generate customer number automatically
     const customerNumber = await generateCustomerNumber();
 
     const { data, error } = await supabase
@@ -308,8 +312,12 @@ const addCustomerToSupabase = async (customer: Customer, adminEmail: string) => 
         clerk_user_id: customer.id,
         name: customer.name,
         email: customer.email,
-        customer_number: customerNumber,          // 🆕 NEW
-        role: customer.role || 'customer',        // 🆕 NEW
+
+        phone: customer.phone,                    // ✅ FIX
+        profile_photo: customer.profilePhoto,     // ✅ FIX
+
+        customer_number: customerNumber,
+        role: customer.role || 'customer',
         payment_type: customer.paymentType,
         monthly_balance: 0,
         total_spent: 0,
@@ -325,8 +333,12 @@ const addCustomerToSupabase = async (customer: Customer, adminEmail: string) => 
       id: data.id,
       name: data.name,
       email: data.email,
-      customerNumber: data.customer_number,      // 🆕 NEW
-      role: data.role || 'customer',             // 🆕 NEW
+
+      phone: data.phone,                          // ✅ FIX
+      profilePhoto: data.profile_photo,           // ✅ FIX
+
+      customerNumber: data.customer_number,
+      role: data.role || 'customer',
       paymentType: data.payment_type,
       monthlyBalance: 0,
       totalSpent: 0,
@@ -341,17 +353,23 @@ const addCustomerToSupabase = async (customer: Customer, adminEmail: string) => 
   }
 };
 
-const updateCustomerInSupabase = async (customerId: string, updates: Partial<Customer>) => {
+
+const updateCustomerInSupabase = async (
+  customerId: string,
+  updates: Partial<Customer>
+) => {
   try {
     const updateData: any = {};
-    
+
     if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.phone !== undefined) updateData.phone = updates.phone;                 // ✅ FIX
+    if (updates.profilePhoto !== undefined) updateData.profile_photo = updates.profilePhoto; // ✅ FIX
     if (updates.paymentType !== undefined) updateData.payment_type = updates.paymentType;
     if (updates.monthlyBalance !== undefined) updateData.monthly_balance = updates.monthlyBalance;
     if (updates.totalSpent !== undefined) updateData.total_spent = updates.totalSpent;
     if (updates.isFirstLogin !== undefined) updateData.is_first_login = updates.isFirstLogin;
-    if (updates.role !== undefined) updateData.role = updates.role;                    // 🆕 NEW
-    if (updates.customerNumber !== undefined) updateData.customer_number = updates.customerNumber; // 🆕 NEW
+    if (updates.role !== undefined) updateData.role = updates.role;
+    if (updates.customerNumber !== undefined) updateData.customer_number = updates.customerNumber;
 
     const { error } = await supabase
       .from('customers')
@@ -366,6 +384,7 @@ const updateCustomerInSupabase = async (customerId: string, updates: Partial<Cus
     throw error;
   }
 };
+
 
   // ========== DISH FUNCTIONS ==========
   const fetchDishesFromSupabase = async () => {

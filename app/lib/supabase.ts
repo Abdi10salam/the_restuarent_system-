@@ -123,4 +123,82 @@ export async function deleteDishImage(imageUrl: string): Promise<boolean> {
   }
 }
 
+// Upload profile image - SAME PATTERN as uploadDishImage
+export async function uploadProfileImage(uri: string, userName: string): Promise<string | null> {
+  try {
+    console.log('Starting profile upload...');
+    console.log('URI:', uri);
+    
+    // Create a unique filename (same pattern as dishes)
+    const fileExt = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+    const fileName = `profile_${Date.now()}_${userName.replace(/\s+/g, '_')}.${fileExt}`;
+    const filePath = fileName;
 
+    console.log('Uploading as:', filePath);
+
+    // For React Native, we need to read the file as ArrayBuffer (SAME as dishes)
+    const response = await fetch(uri);
+    const arrayBuffer = await response.arrayBuffer();
+    
+    console.log('File size:', arrayBuffer.byteLength, 'bytes');
+    
+    // Check if file is valid (SAME as dishes)
+    if (arrayBuffer.byteLength < 1000) {
+      console.error('File size too small');
+      throw new Error('Failed to read image file');
+    }
+
+    // Upload the ArrayBuffer to SAME BUCKET as dishes
+    const { data, error } = await supabase.storage
+      .from('dish-images')  // ✅ SAME BUCKET as dishes!
+      .upload(filePath, arrayBuffer, {
+        contentType: `image/${fileExt}`,
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      throw error;
+    }
+
+    console.log('Upload successful! Path:', data.path);
+
+    // Get public URL from SAME BUCKET
+    const { data: publicUrlData } = supabase.storage
+      .from('dish-images')  // ✅ SAME BUCKET as dishes!
+      .getPublicUrl(data.path);
+
+    const publicUrl = publicUrlData.publicUrl;
+    console.log('Public URL:', publicUrl);
+
+    return publicUrl;
+  } catch (error: any) {
+    console.error('Error uploading profile image:', error);
+    console.error('Error details:', error.message);
+    return null;
+  }
+}
+
+// Delete profile image - SAME PATTERN as deleteDishImage
+export async function deleteProfileImage(imageUrl: string): Promise<boolean> {
+  try {
+    // Extract filename from URL (SAME as dishes)
+    const urlParts = imageUrl.split("/");
+    const fileName = urlParts[urlParts.length - 1];
+
+    const { error } = await supabase.storage
+      .from("dish-images")  // ✅ SAME BUCKET as dishes!
+      .remove([fileName]);
+
+    if (error) {
+      console.error("Delete error:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error deleting profile image:", error);
+    return false;
+  }
+}
