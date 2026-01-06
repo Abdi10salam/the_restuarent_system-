@@ -238,7 +238,6 @@ export default function AdminCustomersScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>User Management</Text>
           <Text style={styles.subtitle}>
             {customers.filter(c => c.role === 'customer').length} customers • {customers.filter(c => c.role === 'receptionist').length} receptionists
           </Text>
@@ -599,7 +598,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     padding: 24,
-    paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     flexDirection: 'row',
