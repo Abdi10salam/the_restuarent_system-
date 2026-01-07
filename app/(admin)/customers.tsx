@@ -1,18 +1,23 @@
-// app/(admin)/customers.tsx - WITH PHONE NUMBER & PROFILE PHOTO
+// app/(admin)/customers.tsx - REMOVED GENERATE BILL BUTTON
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator, Image } from 'react-native';
-import { Users, DollarSign, Receipt, Plus, Mail, User, CreditCard, Clock, UserCog, X, Phone, Camera, Upload } from 'lucide-react-native';
+import { Users, DollarSign, Receipt, Plus, Mail, User, CreditCard, Clock, UserCog, X, Phone, Camera, Upload, FileText } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSignUp } from '@clerk/clerk-expo';
 import { useApp } from '../../context/AppContext';
 import { Customer } from '../../types';
 import { formatCurrency } from '../../utils/currency';
-import { uploadProfileImage, deleteProfileImage } from '../lib/supabase';
+import { uploadProfileImage, deleteProfileImage } from './../lib/supabase';
+import { useRouter } from 'expo-router';
 
 export default function AdminCustomersScreen() {
   const { state, dispatch, addCustomerToSupabase } = useApp();
   const { customers, orders } = state;
   const { signUp } = useSignUp();
+  const router = useRouter();
+
+  // 🆕 Filter to show only customers (not staff)
+  const actualCustomers = customers.filter(c => c.role === 'customer');
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showStaffOrders, setShowStaffOrders] = useState<string | null>(null);
@@ -21,13 +26,13 @@ export default function AdminCustomersScreen() {
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     email: '',
-    phone: '', // 🆕 NEW
-    profilePhoto: '', // 🆕 NEW
+    phone: '',
+    profilePhoto: '',
     role: 'customer' as 'customer' | 'receptionist',
     paymentType: 'monthly' as 'cash' | 'monthly'
   });
 
-  // 🆕 Request permissions
+  // Request permissions
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -37,7 +42,7 @@ export default function AdminCustomersScreen() {
     return true;
   };
 
-  // 🆕 Pick image from gallery
+  // Pick image from gallery
   const pickProfilePhoto = async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
@@ -46,18 +51,16 @@ export default function AdminCustomersScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [1, 1], // Square aspect ratio for profile photos
+        aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
         const localUri = result.assets[0].uri;
         
-        // Show local image immediately
         setNewCustomer(prev => ({ ...prev, profilePhoto: localUri }));
         setIsUploadingPhoto(true);
         
-        // Upload to Supabase
         const imageUrl = await uploadProfileImage(localUri, newCustomer.email || 'user');
 
         if (imageUrl) {
@@ -77,7 +80,7 @@ export default function AdminCustomersScreen() {
     }
   };
 
-  // 🆕 Take photo with camera
+  // Take photo with camera
   const takeProfilePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -117,7 +120,7 @@ export default function AdminCustomersScreen() {
     }
   };
 
-  // 🆕 Show photo options
+  // Show photo options
   const showPhotoOptions = () => {
     Alert.alert(
       'Profile Photo',
@@ -141,7 +144,6 @@ export default function AdminCustomersScreen() {
       return;
     }
 
-    // 🆕 Validate phone number (optional but recommended format)
     if (newCustomer.phone && !/^[0-9+\s()-]+$/.test(newCustomer.phone)) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return;
@@ -160,8 +162,8 @@ export default function AdminCustomersScreen() {
         id: Date.now().toString(),
         name: newCustomer.name,
         email: newCustomer.email,
-        phone: newCustomer.phone || undefined, // 🆕 NEW
-        profilePhoto: newCustomer.profilePhoto || undefined, // 🆕 NEW
+        phone: newCustomer.phone || undefined,
+        profilePhoto: newCustomer.profilePhoto || undefined,
         customerNumber: 0,
         role: newCustomer.role,
         paymentType: newCustomer.paymentType,
@@ -196,15 +198,33 @@ export default function AdminCustomersScreen() {
     }
   };
 
-  const generateMonthlyBill = (customerId: string) => {
-    const customer = customers.find(c => c.id === customerId);
-    if (!customer || customer.monthlyBalance === 0) {
-      Alert.alert('Info', 'No outstanding balance for this customer');
+  // 🆕 Generate Monthly Report
+  const handleGenerateReport = async () => {
+    // Check if there are customers with outstanding balances
+    const customersWithBalance = actualCustomers.filter(
+      customer => customer.paymentType === 'monthly' && customer.monthlyBalance > 0
+    );
+
+    if (customersWithBalance.length === 0) {
+      Alert.alert(
+        'No Outstanding Balances',
+        'There are no customers with outstanding monthly balances at the moment.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
-    dispatch({ type: 'GENERATE_MONTHLY_BILL', customerId });
-    Alert.alert('Success', 'Monthly bill generated successfully!');
+    Alert.alert(
+      'Generate Monthly Report',
+      `Found ${customersWithBalance.length} customer${customersWithBalance.length !== 1 ? 's' : ''} with outstanding balances.\n\nNavigate to Monthly Bills tab to view the report and download PDF.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'View Report',
+          onPress: () => router.push('/(admin)/monthly-bills')
+        }
+      ]
+    );
   };
 
   const getCustomerStats = (customerId: string) => {
@@ -238,16 +258,28 @@ export default function AdminCustomersScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
+          <Text style={styles.title}>User Management</Text>
           <Text style={styles.subtitle}>
-            {customers.filter(c => c.role === 'customer').length} customers • {customers.filter(c => c.role === 'receptionist').length} receptionists
+            {actualCustomers.length} customers
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
-        >
-          <Plus size={20} color="#fff" strokeWidth={2} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {/* 🆕 Generate Report Button */}
+          <TouchableOpacity
+            style={styles.generateButton}
+            onPress={handleGenerateReport}
+          >
+            <FileText size={18} color="#fff" strokeWidth={2} />
+            <Text style={styles.generateButtonText}>Generate</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowAddModal(true)}
+          >
+            <Plus size={20} color="#fff" strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -255,22 +287,17 @@ export default function AdminCustomersScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {customers.map((customer) => {
-          const isReceptionist = customer.role === 'receptionist';
-          const stats = isReceptionist 
-            ? getStaffStats(customer.id)
-            : getCustomerStats(customer.id);
+        {actualCustomers.map((customer) => {
+          const stats = getCustomerStats(customer.id);
           
           return (
             <TouchableOpacity
               key={customer.id}
               style={styles.customerCard}
-              onPress={() => isReceptionist && setShowStaffOrders(customer.id)}
-              activeOpacity={isReceptionist ? 0.7 : 1}
+              activeOpacity={1}
             >
               <View style={styles.customerHeader}>
                 <View style={styles.customerMainInfo}>
-                  {/* 🆕 Profile Photo */}
                   {customer.profilePhoto ? (
                     <Image 
                       source={{ uri: customer.profilePhoto }} 
@@ -285,28 +312,19 @@ export default function AdminCustomersScreen() {
                   <View style={styles.customerInfo}>
                     <View style={styles.nameRow}>
                       <Text style={styles.customerName}>{customer.name}</Text>
-                      {isReceptionist && (
-                        <View style={styles.receptionistBadge}>
-                          <UserCog size={12} color="#fff" strokeWidth={2} />
-                          <Text style={styles.receptionistBadgeText}>Staff</Text>
-                        </View>
-                      )}
                     </View>
                     <Text style={styles.customerEmail}>{customer.email}</Text>
-                    {/* 🆕 Phone Number Display */}
                     {customer.phone && (
                       <Text style={styles.customerPhone}>📱 {customer.phone}</Text>
                     )}
                     <Text style={styles.customerNumber}>#{customer.customerNumber}</Text>
                     <View style={styles.customerMeta}>
-                      {!isReceptionist && (
-                        <Text style={[
-                          styles.paymentType,
-                          { backgroundColor: customer.paymentType === 'monthly' ? '#DBEAFE' : '#D1FAE5' }
-                        ]}>
-                          {customer.paymentType === 'monthly' ? 'Monthly Billing' : 'Cash Only'}
-                        </Text>
-                      )}
+                      <Text style={[
+                        styles.paymentType,
+                        { backgroundColor: customer.paymentType === 'monthly' ? '#DBEAFE' : '#D1FAE5' }
+                      ]}>
+                        {customer.paymentType === 'monthly' ? 'Monthly Billing' : 'Cash Only'}
+                      </Text>
                       {customer.isFirstLogin && (
                         <Text style={styles.firstLoginBadge}>First Login Pending</Text>
                       )}
@@ -315,68 +333,49 @@ export default function AdminCustomersScreen() {
                 </View>
                 
                 <View style={styles.customerStats}>
-                  {isReceptionist ? (
-                    <>
-                      <View style={styles.statItem}>
-                        <Receipt size={16} color="#10B981" strokeWidth={2} />
-                        <Text style={styles.statText}>{stats.totalOrders} orders</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <DollarSign size={16} color="#F97316" strokeWidth={2} />
-                        <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.statItem}>
-                        <Receipt size={16} color="#F97316" strokeWidth={2} />
-                        <Text style={styles.statText}>{stats.totalOrders} orders</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <DollarSign size={16} color="#10B981" strokeWidth={2} />
-                        <Text style={styles.statText}>{formatCurrency(customer.totalSpent)} spent</Text>
-                      </View>
-                      {stats.pendingOrders > 0 && (
-                        <View style={styles.statItem}>
-                          <Clock size={16} color="#F59E0B" strokeWidth={2} />
-                          <Text style={styles.statText}>{stats.pendingOrders} pending</Text>
-                        </View>
-                      )}
-                    </>
+                  <View style={styles.statItem}>
+                    <Receipt size={16} color="#F97316" strokeWidth={2} />
+                    <Text style={styles.statText}>{stats.totalOrders} orders</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <DollarSign size={16} color="#10B981" strokeWidth={2} />
+                    <Text style={styles.statText}>{formatCurrency(customer.totalSpent)} spent</Text>
+                  </View>
+                  {stats.pendingOrders > 0 && (
+                    <View style={styles.statItem}>
+                      <Clock size={16} color="#F59E0B" strokeWidth={2} />
+                      <Text style={styles.statText}>{stats.pendingOrders} pending</Text>
+                    </View>
                   )}
                 </View>
               </View>
 
-              {!isReceptionist && customer.monthlyBalance > 0 && (
-                <View style={styles.balanceSection}>
+              {/* Balance indicator */}
+              {customer.monthlyBalance > 0 && (
+                <View style={styles.balanceIndicator}>
                   <View style={styles.balanceInfo}>
                     <Text style={styles.balanceLabel}>Outstanding Balance</Text>
                     <Text style={styles.balanceAmount}>{formatCurrency(customer.monthlyBalance)}</Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.billButton}
-                    onPress={() => generateMonthlyBill(customer.id)}
-                  >
-                    <Text style={styles.billButtonText}>Generate Bill</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.balanceHint}>View in Monthly Bills tab</Text>
                 </View>
               )}
             </TouchableOpacity>
           );
         })}
 
-        {customers.length === 0 && (
+        {actualCustomers.length === 0 && (
           <View style={styles.emptyState}>
             <Users size={64} color="#D1D5DB" strokeWidth={1} />
-            <Text style={styles.emptyText}>No users registered</Text>
-            <Text style={styles.emptySubtext}>Add your first user to get started</Text>
+            <Text style={styles.emptyText}>No customers registered</Text>
+            <Text style={styles.emptySubtext}>Add your first customer to get started</Text>
           </View>
         )}
 
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Register User Modal */}
+      {/* Register User Modal - Keep existing code */}
       <Modal
         visible={showAddModal}
         transparent
@@ -398,7 +397,7 @@ export default function AdminCustomersScreen() {
             </View>
 
             <ScrollView style={styles.modalForm}>
-              {/* 🆕 Profile Photo Upload */}
+              {/* Profile Photo Upload */}
               <View style={styles.photoUploadSection}>
                 <Text style={styles.photoLabel}>Profile Photo (Optional)</Text>
                 {newCustomer.profilePhoto ? (
@@ -463,7 +462,6 @@ export default function AdminCustomersScreen() {
                 />
               </View>
 
-              {/* 🆕 Phone Number Input */}
               <View style={styles.inputContainer}>
                 <Phone size={20} color="#6B7280" strokeWidth={2} />
                 <TextInput
@@ -584,8 +582,7 @@ export default function AdminCustomersScreen() {
         </View>
       </Modal>
 
-      {/* Staff Orders Modal - Keep existing code */}
-      {/* ... (existing staff orders modal code) ... */}
+      {/* Staff Orders Modal - Keep existing if needed */}
     </View>
   );
 }
@@ -598,6 +595,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     padding: 24,
+    paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     flexDirection: 'row',
@@ -613,6 +611,30 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
+  },
+  // 🆕 Header actions with generate button
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  generateButton: {
+    backgroundColor: '#F97316',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  generateButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   addButton: {
     backgroundColor: '#10B981',
@@ -650,7 +672,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 12,
   },
-  // 🆕 Profile photo styles
   profilePhoto: {
     width: 60,
     height: 60,
@@ -701,7 +722,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 2,
   },
-  // 🆕 Phone number style
   customerPhone: {
     fontSize: 13,
     color: '#6B7280',
@@ -748,7 +768,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
   },
-  balanceSection: {
+  // 🆕 Balance indicator (instead of button)
+  balanceIndicator: {
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
@@ -770,16 +791,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#F97316',
   },
-  billButton: {
-    backgroundColor: '#F97316',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  billButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+  balanceHint: {
+    fontSize: 12,
+    color: '#10B981',
+    fontStyle: 'italic',
   },
   emptyState: {
     backgroundColor: '#fff',
@@ -838,7 +853,6 @@ const styles = StyleSheet.create({
     maxHeight: 500,
     marginBottom: 24,
   },
-  // 🆕 Photo upload styles
   photoUploadSection: {
     marginBottom: 16,
     alignItems: 'center',
