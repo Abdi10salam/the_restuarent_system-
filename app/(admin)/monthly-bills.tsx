@@ -1,10 +1,12 @@
-// app/(admin)/monthly-bills.tsx
+// app/(admin)/monthly-bills.tsx - CLEAN TABLE PDF VERSION
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
-import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail } from 'lucide-react-native';
+import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail, Download, FileText } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
 import { Customer } from '../../types';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 export default function MonthlyBillsScreen() {
   const { state, updateCustomerInSupabase } = useApp();
@@ -14,19 +16,20 @@ export default function MonthlyBillsScreen() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // Get customers with outstanding balances (monthly billing only)
+  // Get customers with outstanding balances
   const customersWithBalance = customers.filter(
     customer => customer.paymentType === 'monthly' && customer.monthlyBalance > 0
   );
 
-  // Calculate total outstanding across all customers
+  // Calculate total outstanding
   const totalOutstanding = customersWithBalance.reduce(
     (sum, customer) => sum + customer.monthlyBalance,
     0
   );
 
-  // Get orders for a specific customer
+  // Get orders for a customer
   const getCustomerOrders = (customerId: string) => {
     return orders.filter(
       order => 
@@ -94,7 +97,7 @@ export default function MonthlyBillsScreen() {
     }
   };
 
-  // Get current month name
+  // Get current month
   const getCurrentMonth = () => {
     return new Date().toLocaleDateString('en-US', { 
       month: 'long', 
@@ -102,12 +105,328 @@ export default function MonthlyBillsScreen() {
     });
   };
 
+  // 🆕 Generate Professional Table PDF
+  const generatePDFReport = async () => {
+    setIsGeneratingPDF(true);
+
+    try {
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      // Generate HTML for PDF with TABLE layout
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Monthly Billing Report - ${getCurrentMonth()}</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: 'Arial', sans-serif;
+              padding: 40px;
+              color: #1F2937;
+              line-height: 1.6;
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 40px;
+              border-bottom: 3px solid #F97316;
+              padding-bottom: 25px;
+            }
+            
+            .restaurant-name {
+              font-size: 36px;
+              font-weight: bold;
+              color: #1F2937;
+              margin-bottom: 10px;
+              letter-spacing: 1px;
+            }
+            
+            .report-title {
+              font-size: 20px;
+              color: #6B7280;
+              margin-bottom: 8px;
+              font-weight: 600;
+            }
+            
+            .report-date {
+              font-size: 14px;
+              color: #9CA3AF;
+            }
+            
+            .summary-section {
+              display: flex;
+              justify-content: space-around;
+              margin-bottom: 35px;
+              padding: 20px;
+              background: #FEF3E2;
+              border-radius: 8px;
+            }
+            
+            .summary-item {
+              text-align: center;
+            }
+            
+            .summary-label {
+              font-size: 14px;
+              color: #6B7280;
+              margin-bottom: 8px;
+              font-weight: 600;
+            }
+            
+            .summary-value {
+              font-size: 28px;
+              font-weight: bold;
+              color: #F97316;
+            }
+            
+            .table-container {
+              margin-top: 30px;
+              border: 2px solid #E5E7EB;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            
+            thead {
+              background: #F97316;
+              color: white;
+            }
+            
+            th {
+              padding: 15px 12px;
+              text-align: left;
+              font-size: 14px;
+              font-weight: bold;
+              border-bottom: 2px solid #E5E7EB;
+            }
+            
+            th:first-child {
+              width: 5%;
+              text-align: center;
+            }
+            
+            th:nth-child(2) {
+              width: 50%;
+            }
+            
+            th:last-child {
+              width: 20%;
+              text-align: right;
+            }
+            
+            tbody tr {
+              border-bottom: 1px solid #E5E7EB;
+            }
+            
+            tbody tr:nth-child(even) {
+              background: #F9FAFB;
+            }
+            
+            tbody tr:hover {
+              background: #FEF3E2;
+            }
+            
+            td {
+              padding: 16px 12px;
+              font-size: 13px;
+            }
+            
+            td:first-child {
+              text-align: center;
+              font-weight: bold;
+              color: #6B7280;
+            }
+            
+            .customer-details {
+              line-height: 1.8;
+            }
+            
+            .customer-name {
+              font-size: 16px;
+              font-weight: bold;
+              color: #1F2937;
+              margin-bottom: 4px;
+            }
+            
+            .customer-info {
+              font-size: 13px;
+              color: #6B7280;
+              margin-bottom: 2px;
+            }
+            
+            .customer-number {
+              display: inline-block;
+              background: #F97316;
+              color: white;
+              padding: 2px 10px;
+              border-radius: 12px;
+              font-size: 11px;
+              font-weight: bold;
+              margin-top: 4px;
+            }
+            
+            .balance-cell {
+              text-align: right;
+              font-size: 18px;
+              font-weight: bold;
+              color: #F97316;
+            }
+            
+            .total-row {
+              background: #FEF3E2 !important;
+              font-weight: bold;
+            }
+            
+            .total-row td {
+              padding: 18px 12px;
+              border-top: 3px solid #F97316;
+            }
+            
+            .total-label {
+              text-align: right;
+              font-size: 16px;
+              color: #1F2937;
+            }
+            
+            .total-amount {
+              text-align: right;
+              font-size: 22px;
+              font-weight: bold;
+              color: #F97316;
+            }
+            
+            .footer {
+              margin-top: 50px;
+              text-align: center;
+              padding-top: 25px;
+              border-top: 2px solid #E5E7EB;
+            }
+            
+            .footer-text {
+              font-size: 12px;
+              color: #6B7280;
+              margin-bottom: 8px;
+            }
+            
+            @media print {
+              body {
+                padding: 20px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <!-- Header -->
+          <div class="header">
+            <div class="restaurant-name">Hiil Restaurant</div>
+            <div class="report-title">Monthly Customer Billing Report</div>
+            <div class="report-date">${getCurrentMonth()}</div>
+            <div class="report-date">Generated on ${currentDate}</div>
+          </div>
+
+          <!-- Summary Section -->
+          <div class="summary-section">
+            <div class="summary-item">
+              <div class="summary-label">Total Customers</div>
+              <div class="summary-value">${customersWithBalance.length}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Total Outstanding</div>
+              <div class="summary-value">${formatCurrency(totalOutstanding)}</div>
+            </div>
+          </div>
+
+          <!-- Customer Table -->
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Customer Details</th>
+                  <th>Outstanding Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${customersWithBalance.map((customer, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>
+                      <div class="customer-details">
+                        <div class="customer-name">${customer.name}</div>
+                        <div class="customer-info">📧 ${customer.email}</div>
+                        ${customer.phone ? `<div class="customer-info">📱 ${customer.phone}</div>` : ''}
+                        <span class="customer-number">#${customer.customerNumber}</span>
+                      </div>
+                    </td>
+                    <td class="balance-cell">${formatCurrency(customer.monthlyBalance)}</td>
+                  </tr>
+                `).join('')}
+                
+                <!-- Total Row -->
+                <tr class="total-row">
+                  <td colspan="2" class="total-label">TOTAL OUTSTANDING</td>
+                  <td class="total-amount">${formatCurrency(totalOutstanding)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Footer -->
+          <div class="footer">
+            <p class="footer-text">This is an automated report generated by Hiil Restaurant Management System</p>
+            <p class="footer-text">Report generated on ${currentDate}</p>
+            <p class="footer-text">For inquiries, please contact the restaurant administration</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Generate PDF
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
+        base64: false
+      });
+
+      // Share PDF
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Monthly Bills Report - ${getCurrentMonth()}`,
+          UTI: 'com.adobe.pdf'
+        });
+      } else {
+        Alert.alert('Success', 'PDF generated successfully!');
+      }
+
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      Alert.alert('Error', 'Failed to generate PDF report.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Monthly Bills</Text>
+          
           <Text style={styles.subtitle}>{getCurrentMonth()}</Text>
         </View>
         <View style={styles.totalBadge}>
@@ -140,6 +459,29 @@ export default function MonthlyBillsScreen() {
           </View>
         </View>
 
+        {/* Download PDF Button */}
+        {customersWithBalance.length > 0 && (
+          <View style={styles.pdfButtonContainer}>
+            <TouchableOpacity
+              style={[styles.pdfButton, isGeneratingPDF && styles.disabledButton]}
+              onPress={generatePDFReport}
+              disabled={isGeneratingPDF}
+            >
+              {isGeneratingPDF ? (
+                <>
+                  <FileText size={20} color="#fff" strokeWidth={2} />
+                  <Text style={styles.pdfButtonText}>Generating PDF...</Text>
+                </>
+              ) : (
+                <>
+                  <Download size={20} color="#fff" strokeWidth={2} />
+                  <Text style={styles.pdfButtonText}>Download PDF Report</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Customer Bills */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Outstanding Balances</Text>
@@ -156,7 +498,6 @@ export default function MonthlyBillsScreen() {
               
               return (
                 <View key={customer.id} style={styles.billCard}>
-                  {/* Customer Info */}
                   <View style={styles.billHeader}>
                     <View style={styles.customerInfo}>
                       <View style={styles.customerNameRow}>
@@ -169,10 +510,14 @@ export default function MonthlyBillsScreen() {
                         <Mail size={14} color="#6B7280" strokeWidth={2} />
                         <Text style={styles.customerEmail}>{customer.email}</Text>
                       </View>
+                      {customer.phone && (
+                        <View style={styles.customerPhoneRow}>
+                          <Text style={styles.customerPhone}>📱 {customer.phone}</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
-                  {/* Balance Display */}
                   <View style={styles.balanceSection}>
                     <View style={styles.balanceRow}>
                       <Text style={styles.balanceLabel}>Outstanding Balance</Text>
@@ -184,7 +529,6 @@ export default function MonthlyBillsScreen() {
                     </View>
                   </View>
 
-                  {/* Order Summary */}
                   <View style={styles.orderSummary}>
                     <View style={styles.orderSummaryHeader}>
                       <Calendar size={16} color="#6B7280" strokeWidth={2} />
@@ -210,7 +554,6 @@ export default function MonthlyBillsScreen() {
                     )}
                   </View>
 
-                  {/* Payment Button */}
                   <TouchableOpacity
                     style={styles.payButton}
                     onPress={() => handlePayment(customer)}
@@ -357,7 +700,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   statCard: {
     flex: 1,
@@ -383,6 +726,29 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  pdfButtonContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  pdfButton: {
+    backgroundColor: '#10B981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  pdfButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   section: {
     marginBottom: 24,
@@ -441,9 +807,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 4,
   },
   customerEmail: {
     fontSize: 14,
+    color: '#6B7280',
+  },
+  customerPhoneRow: {
+    marginTop: 4,
+  },
+  customerPhone: {
+    fontSize: 13,
     color: '#6B7280',
   },
   balanceSection: {
@@ -679,4 +1053,4 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-});
+}); 

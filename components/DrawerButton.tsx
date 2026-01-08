@@ -1,9 +1,9 @@
 // components/DrawerButton.tsx
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
-import { Menu, X, Users, Receipt, Settings as SettingsIcon, LogOut } from 'lucide-react-native';
+import { Menu, X, Users, Receipt, Settings as SettingsIcon, LogOut, UserCog } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
-import { useRouter } from 'expo-router';
+import { useRouter, Href } from 'expo-router';
 
 export default function DrawerButton() {
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -16,9 +16,9 @@ export default function DrawerButton() {
     router.replace('/portal-selection');
   };
 
-  const navigateTo = (route: string) => {
+  const navigateTo = (route: Href) => {
     setDrawerVisible(false);
-    router.push(route as any);
+    router.push(route);
   };
 
   return (
@@ -75,6 +75,14 @@ export default function DrawerButton() {
               >
                 <Users size={22} color="#6B7280" strokeWidth={2} />
                 <Text style={styles.menuItemText}>Customers</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => navigateTo('/(admin)/hr')}
+              >
+                <UserCog size={22} color="#6B7280" strokeWidth={2} />
+                <Text style={styles.menuItemText}>HR Management</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
