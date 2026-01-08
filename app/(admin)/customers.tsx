@@ -265,13 +265,7 @@ export default function AdminCustomersScreen() {
         </View>
         <View style={styles.headerActions}>
           {/* 🆕 Generate Report Button */}
-          <TouchableOpacity
-            style={styles.generateButton}
-            onPress={handleGenerateReport}
-          >
-            <FileText size={18} color="#fff" strokeWidth={2} />
-            <Text style={styles.generateButtonText}>Generate</Text>
-          </TouchableOpacity>
+          
           
           <TouchableOpacity
             style={styles.addButton}

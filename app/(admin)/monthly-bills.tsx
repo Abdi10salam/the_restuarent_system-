@@ -1,7 +1,7 @@
 // app/(admin)/monthly-bills.tsx - CLEAN TABLE PDF VERSION
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
-import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail, Download, FileText } from 'lucide-react-native';
+import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail, Download, FileText, Search } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
 import { Customer } from '../../types';
@@ -17,14 +17,27 @@ export default function MonthlyBillsScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(''); // 🆕 Search state
 
   // Get customers with outstanding balances
   const customersWithBalance = customers.filter(
     customer => customer.paymentType === 'monthly' && customer.monthlyBalance > 0
   );
 
+  // 🆕 Filter customers based on search
+  const filteredCustomers = customersWithBalance.filter(customer => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    
+    const nameMatch = customer.name.toLowerCase().includes(query);
+    const numberMatch = customer.customerNumber.toString().includes(query);
+    const emailMatch = customer.email.toLowerCase().includes(query);
+    
+    return nameMatch || numberMatch || emailMatch;
+  });
+
   // Calculate total outstanding
-  const totalOutstanding = customersWithBalance.reduce(
+  const totalOutstanding = filteredCustomers.reduce(
     (sum, customer) => sum + customer.monthlyBalance,
     0
   );
@@ -130,202 +143,225 @@ export default function MonthlyBillsScreen() {
               box-sizing: border-box;
             }
             
-            body {
-              font-family: 'Arial', sans-serif;
-              padding: 40px;
-              color: #1F2937;
-              line-height: 1.6;
+            @page {
+              margin: 20mm;
             }
             
+            body {
+              font-family: 'Helvetica', 'Arial', sans-serif;
+              color: #1F2937;
+              line-height: 1.6;
+              font-size: 12pt;
+            }
+            
+            /* Header Section */
             .header {
               text-align: center;
-              margin-bottom: 40px;
-              border-bottom: 3px solid #F97316;
-              padding-bottom: 25px;
+              margin-bottom: 30px;
+              padding-bottom: 20px;
+              border-bottom: 4px solid #F97316;
             }
             
             .restaurant-name {
-              font-size: 36px;
-              font-weight: bold;
+              font-size: 32pt;
+              font-weight: 700;
               color: #1F2937;
-              margin-bottom: 10px;
-              letter-spacing: 1px;
+              margin-bottom: 8px;
+              letter-spacing: 0.5px;
             }
             
             .report-title {
-              font-size: 20px;
+              font-size: 16pt;
               color: #6B7280;
-              margin-bottom: 8px;
-              font-weight: 600;
+              margin-bottom: 12px;
+              font-weight: 500;
             }
             
-            .report-date {
-              font-size: 14px;
+            .report-meta {
+              font-size: 10pt;
               color: #9CA3AF;
-            }
-            
-            .summary-section {
               display: flex;
-              justify-content: space-around;
-              margin-bottom: 35px;
-              padding: 20px;
-              background: #FEF3E2;
-              border-radius: 8px;
+              justify-content: center;
+              gap: 20px;
             }
             
-            .summary-item {
-              text-align: center;
+            .report-meta span {
+              padding: 4px 12px;
+              background: #F3F4F6;
+              border-radius: 4px;
             }
             
-            .summary-label {
-              font-size: 14px;
-              color: #6B7280;
-              margin-bottom: 8px;
+            
+            
+            /* Table Section */
+            .table-title {
+              font-size: 14pt;
               font-weight: 600;
-            }
-            
-            .summary-value {
-              font-size: 28px;
-              font-weight: bold;
-              color: #F97316;
-            }
-            
-            .table-container {
-              margin-top: 30px;
-              border: 2px solid #E5E7EB;
-              border-radius: 8px;
-              overflow: hidden;
-            }
-            
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-            
-            thead {
-              background: #F97316;
-              color: white;
-            }
-            
-            th {
-              padding: 15px 12px;
-              text-align: left;
-              font-size: 14px;
-              font-weight: bold;
+              color: #1F2937;
+              margin-bottom: 16px;
+              padding-bottom: 8px;
               border-bottom: 2px solid #E5E7EB;
             }
             
-            th:first-child {
-              width: 5%;
+            .customer-table {
+              width: 100%;
+              border-collapse: collapse;
+              background: white;
+              border: 1px solid #E5E7EB;
+              border-radius: 8px;
+              overflow: hidden;
+              margin-bottom: 24px;
+            }
+            
+            .customer-table thead {
+              background: linear-gradient(to bottom, #F97316, #EA580C);
+              color: white;
+            }
+            
+            .customer-table th {
+              padding: 12px 16px;
+              text-align: left;
+              font-size: 10pt;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            .customer-table th:first-child {
+              width: 40px;
               text-align: center;
             }
             
-            th:nth-child(2) {
-              width: 50%;
-            }
-            
-            th:last-child {
-              width: 20%;
+            .customer-table th:last-child {
               text-align: right;
+              width: 140px;
             }
             
-            tbody tr {
+            .customer-table tbody tr {
               border-bottom: 1px solid #E5E7EB;
             }
             
-            tbody tr:nth-child(even) {
+            .customer-table tbody tr:nth-child(even) {
               background: #F9FAFB;
             }
             
-            tbody tr:hover {
-              background: #FEF3E2;
+            .customer-table tbody tr:last-child {
+              border-bottom: none;
             }
             
-            td {
-              padding: 16px 12px;
-              font-size: 13px;
+            .customer-table td {
+              padding: 14px 16px;
+              font-size: 10pt;
+              vertical-align: top;
             }
             
-            td:first-child {
+            .customer-table td:first-child {
               text-align: center;
-              font-weight: bold;
+              font-weight: 600;
               color: #6B7280;
+              font-size: 11pt;
             }
             
-            .customer-details {
-              line-height: 1.8;
+            .customer-table td:last-child {
+              text-align: right;
+              font-weight: 700;
+              color: #F97316;
+              font-size: 12pt;
             }
             
+            /* Customer Details */
             .customer-name {
-              font-size: 16px;
-              font-weight: bold;
+              font-size: 11pt;
+              font-weight: 600;
               color: #1F2937;
               margin-bottom: 4px;
             }
             
-            .customer-info {
-              font-size: 13px;
+            .customer-contact {
+              font-size: 9pt;
               color: #6B7280;
+              line-height: 1.6;
               margin-bottom: 2px;
             }
             
-            .customer-number {
+            .customer-badge {
               display: inline-block;
               background: #F97316;
               color: white;
-              padding: 2px 10px;
-              border-radius: 12px;
-              font-size: 11px;
-              font-weight: bold;
+              padding: 2px 8px;
+              border-radius: 4px;
+              font-size: 8pt;
+              font-weight: 600;
               margin-top: 4px;
             }
             
-            .balance-cell {
-              text-align: right;
-              font-size: 18px;
-              font-weight: bold;
-              color: #F97316;
-            }
-            
+            /* Total Row */
             .total-row {
-              background: #FEF3E2 !important;
-              font-weight: bold;
+              background: linear-gradient(to bottom, #FEF3E2, #FED7AA) !important;
+              border-top: 3px solid #F97316 !important;
+              border-bottom: 3px solid #F97316 !important;
             }
             
             .total-row td {
-              padding: 18px 12px;
-              border-top: 3px solid #F97316;
+              padding: 16px !important;
+              font-weight: 700 !important;
             }
             
             .total-label {
-              text-align: right;
-              font-size: 16px;
-              color: #1F2937;
+              text-align: right !important;
+              font-size: 12pt !important;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              color: #1F2937 !important;
             }
             
             .total-amount {
-              text-align: right;
-              font-size: 22px;
-              font-weight: bold;
-              color: #F97316;
+              font-size: 18pt !important;
+              color: #000000ff !important;
             }
             
+            /* Footer */
             .footer {
-              margin-top: 50px;
-              text-align: center;
-              padding-top: 25px;
+              margin-top: 40px;
+              padding-top: 20px;
               border-top: 2px solid #E5E7EB;
+              text-align: center;
             }
             
             .footer-text {
-              font-size: 12px;
+              font-size: 9pt;
               color: #6B7280;
-              margin-bottom: 8px;
+              line-height: 1.8;
+              margin-bottom: 4px;
             }
             
+            .footer-text.primary {
+              font-weight: 600;
+              color: #1F2937;
+            }
+            
+            /* Print Styles */
             @media print {
               body {
-                padding: 20px;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+              }
+              
+              .summary-section {
+                page-break-inside: avoid;
+              }
+              
+              .customer-table {
+                page-break-inside: auto;
+              }
+              
+              .customer-table tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+              }
+              
+              .total-row {
+                page-break-before: avoid;
               }
             }
           </style>
@@ -335,60 +371,55 @@ export default function MonthlyBillsScreen() {
           <div class="header">
             <div class="restaurant-name">Hiil Restaurant</div>
             <div class="report-title">Monthly Customer Billing Report</div>
-            <div class="report-date">${getCurrentMonth()}</div>
-            <div class="report-date">Generated on ${currentDate}</div>
+            <div class="report-meta">
+              <span>📅 ${getCurrentMonth()}</span>
+              <span>📄 Generated ${currentDate}</span>
+            </div>
           </div>
 
           <!-- Summary Section -->
           <div class="summary-section">
-            <div class="summary-item">
-              <div class="summary-label">Total Customers</div>
-              <div class="summary-value">${customersWithBalance.length}</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">Total Outstanding</div>
-              <div class="summary-value">${formatCurrency(totalOutstanding)}</div>
-            </div>
+       
           </div>
 
+          <!-- Table Title -->
+          
           <!-- Customer Table -->
-          <div class="table-container">
-            <table>
-              <thead>
+          <table class="customer-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Customer Information</th>
+                <th>Outstanding Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${customersWithBalance.map((customer, index) => `
                 <tr>
-                  <th>#</th>
-                  <th>Customer Details</th>
-                  <th>Outstanding Balance</th>
+                  <td>${index + 1}</td>
+                  <td>
+                  <div class="customer-name">
+                  ${customer.name}
+                  <span class="customer-badge">#${customer.customerNumber}</span>
+                </div>
+                <div class="customer-contact">📧 ${customer.email}</div>
+                ${customer.phone ? `<div class="customer-contact">📱 ${customer.phone}</div>` : ''}
+                  </td>
+                  <td>${formatCurrency(customer.monthlyBalance)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${customersWithBalance.map((customer, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>
-                      <div class="customer-details">
-                        <div class="customer-name">${customer.name}</div>
-                        <div class="customer-info">📧 ${customer.email}</div>
-                        ${customer.phone ? `<div class="customer-info">📱 ${customer.phone}</div>` : ''}
-                        <span class="customer-number">#${customer.customerNumber}</span>
-                      </div>
-                    </td>
-                    <td class="balance-cell">${formatCurrency(customer.monthlyBalance)}</td>
-                  </tr>
-                `).join('')}
-                
-                <!-- Total Row -->
-                <tr class="total-row">
-                  <td colspan="2" class="total-label">TOTAL OUTSTANDING</td>
-                  <td class="total-amount">${formatCurrency(totalOutstanding)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+              `).join('')}
+              
+              <!-- Total Row -->
+              <tr class="total-row">
+                <td colspan="3" class="total-label">Total Outstanding</td>
+                <td class="total-amount">${formatCurrency(totalOutstanding)}</td>
+              </tr>
+            </tbody>
+          </table>
 
           <!-- Footer -->
           <div class="footer">
-            <p class="footer-text">This is an automated report generated by Hiil Restaurant Management System</p>
+            <p class="footer-text primary">This is an automated report generated by Hiil Restaurant Management System</p>
             <p class="footer-text">Report generated on ${currentDate}</p>
             <p class="footer-text">For inquiries, please contact the restaurant administration</p>
           </div>
@@ -426,7 +457,6 @@ export default function MonthlyBillsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          
           <Text style={styles.subtitle}>{getCurrentMonth()}</Text>
         </View>
         <View style={styles.totalBadge}>
@@ -440,18 +470,42 @@ export default function MonthlyBillsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* 🆕 Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <Search size={20} color="#64748B" strokeWidth={2} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name, number, or email..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#94A3B8"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <X size={20} color="#64748B" strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {searchQuery && (
+            <Text style={styles.searchResults}>
+              {filteredCustomers.length} result{filteredCustomers.length !== 1 ? 's' : ''} found
+            </Text>
+          )}
+        </View>
+
         {/* Summary Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Receipt size={24} color="#10B981" strokeWidth={2} />
+            <Receipt size={24} color="#0EA5E9" strokeWidth={2} />
             <View style={styles.statInfo}>
-              <Text style={styles.statValue}>{customersWithBalance.length}</Text>
+              <Text style={styles.statValue}>{filteredCustomers.length}</Text>
               <Text style={styles.statLabel}>Customers</Text>
             </View>
           </View>
 
           <View style={styles.statCard}>
-            <DollarSign size={24} color="#F97316" strokeWidth={2} />
+            <DollarSign size={24} color="#0284C7" strokeWidth={2} />
             <View style={styles.statInfo}>
               <Text style={styles.statValue}>{formatCurrency(totalOutstanding)}</Text>
               <Text style={styles.statLabel}>Outstanding</Text>
@@ -486,14 +540,24 @@ export default function MonthlyBillsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Outstanding Balances</Text>
           
-          {customersWithBalance.length === 0 ? (
+          {filteredCustomers.length === 0 ? (
             <View style={styles.emptyState}>
-              <CheckCircle size={64} color="#10B981" strokeWidth={1} />
-              <Text style={styles.emptyText}>All Clear!</Text>
-              <Text style={styles.emptySubtext}>No outstanding balances at the moment</Text>
+              {searchQuery ? (
+                <>
+                  <Search size={64} color="#CBD5E1" strokeWidth={1} />
+                  <Text style={styles.emptyText}>No results found</Text>
+                  <Text style={styles.emptySubtext}>Try searching with a different term</Text>
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={64} color="#0EA5E9" strokeWidth={1} />
+                  <Text style={styles.emptyText}>All Clear!</Text>
+                  <Text style={styles.emptySubtext}>No outstanding balances at the moment</Text>
+                </>
+              )}
             </View>
           ) : (
-            customersWithBalance.map((customer) => {
+            filteredCustomers.map((customer) => {
               const customerOrders = getCustomerOrders(customer.id);
               
               return (
@@ -682,7 +746,7 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#000000ff',
     marginBottom: 4,
   },
   totalAmount: {
@@ -695,6 +759,38 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 16,
+  },
+  // 🆕 Search styles
+  searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#0F172A',
+  },
+  searchResults: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 8,
+    marginLeft: 4,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -714,6 +810,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0EA5E9',
   },
   statInfo: {
     marginLeft: 12,
@@ -732,16 +830,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pdfButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#0EA5E9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
-    shadowColor: '#000',
+    shadowColor: '#0EA5E9',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 5,
   },
@@ -897,7 +995,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   payButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#0EA5E9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1013,7 +1111,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: '#0EA5E9',
   },
   paymentInput: {
     flex: 1,
@@ -1042,7 +1140,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#10B981',
+    backgroundColor: '#0EA5E9',
     alignItems: 'center',
   },
   confirmButtonText: {
@@ -1053,4 +1151,4 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-}); 
+});
