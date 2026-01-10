@@ -389,6 +389,7 @@ try {
             </View>
           </View>
         </ScrollView>
+
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
   );
