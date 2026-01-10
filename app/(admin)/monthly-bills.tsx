@@ -1,7 +1,8 @@
-// app/(admin)/monthly-bills.tsx - CLEAN TABLE PDF VERSION
-import React, { useState } from 'react';
+// app/(admin)/monthly-bills.tsx - WITH CALENDAR PICKER
+import React, { useState, useLayoutEffect, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
-import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail, Download, FileText } from 'lucide-react-native';
+import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail, Download, FileText, Search, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
 import { Customer } from '../../types';
@@ -9,55 +10,220 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 export default function MonthlyBillsScreen() {
+  const navigation = useNavigation();
   const { state, updateCustomerInSupabase } = useApp();
   const { customers, orders } = state;
-  
+
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Get customers with outstanding balances
-  const customersWithBalance = customers.filter(
-    customer => customer.paymentType === 'monthly' && customer.monthlyBalance > 0
-  );
+  // Calendar state
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [isSelectingRange, setIsSelectingRange] = useState(false);
 
-  // Calculate total outstanding
-  const totalOutstanding = customersWithBalance.reduce(
-    (sum, customer) => sum + customer.monthlyBalance,
-    0
-  );
-
-  // Get orders for a customer
-  const getCustomerOrders = (customerId: string) => {
-    return orders.filter(
-      order => 
-        order.customerId === customerId && 
-        order.status === 'approved' && 
-        order.paymentType === 'monthly'
-    );
+  // Get date range for filtering
+  const getDateRange = () => {
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start, endDate: end };
+    } else if (startDate) {
+      // Single day selection
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start, endDate: end };
+    } else {
+      // Default to current month
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start, endDate: end };
+    }
   };
 
-  // Open payment modal
-  const handlePayment = (customer: Customer) => {
+  const dateRange = useMemo(() => getDateRange(), [startDate, endDate]);
+
+  // Get display text for selected dates
+  const getDateDisplayText = () => {
+    if (startDate && endDate && startDate.getTime() !== endDate.getTime()) {
+      return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    } else if (startDate) {
+      return startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    } else {
+      return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+  };
+
+  // Calendar functions
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const handleDateSelect = (day: number) => {
+    const selected = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+
+    if (!isSelectingRange) {
+      // First selection - start new range
+      setStartDate(selected);
+      setEndDate(null);
+      setIsSelectingRange(true);
+    } else {
+      // Second selection - complete range
+      if (selected < startDate!) {
+        // Selected date is before start, swap them
+        setEndDate(startDate);
+        setStartDate(selected);
+      } else {
+        setEndDate(selected);
+      }
+      setIsSelectingRange(false);
+      setShowCalendarModal(false);
+    }
+  };
+
+  const isDateInRange = (day: number) => {
+    if (!startDate) return false;
+    const date = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+
+    if (endDate) {
+      return date >= startDate && date <= endDate;
+    } else {
+      return date.getTime() === startDate.getTime();
+    }
+  };
+
+  const isDateStart = (day: number) => {
+    if (!startDate) return false;
+    const date = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+    return date.getTime() === startDate.getTime();
+  };
+
+  const isDateEnd = (day: number) => {
+    if (!endDate) return false;
+    const date = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+    return date.getTime() === endDate.getTime();
+  };
+
+  const clearSelection = () => {
+    setStartDate(null);
+    setEndDate(null);
+    setIsSelectingRange(false);
+  };
+
+  const navigateCalendarMonth = (direction: number) => {
+    const newDate = new Date(currentCalendarMonth);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentCalendarMonth(newDate);
+  };
+
+  // Filter orders by date range
+  const ordersInPeriod = useMemo(() => {
+    return orders.filter(order => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= dateRange.startDate &&
+        orderDate <= dateRange.endDate &&
+        order.status === 'approved' &&
+        order.paymentType === 'monthly';
+    });
+  }, [orders, dateRange]);
+
+  // Calculate balances for customers
+  const customersWithBalance = useMemo(() => {
+    const customerOrderMap = new Map<string, number>();
+
+    ordersInPeriod.forEach(order => {
+      const currentTotal = customerOrderMap.get(order.customerId) || 0;
+      customerOrderMap.set(order.customerId, currentTotal + order.totalAmount);
+    });
+
+    const result = customers
+      .filter(customer =>
+        customer.paymentType === 'monthly' &&
+        customerOrderMap.has(customer.id)
+      )
+      .map(customer => ({
+        ...customer,
+        periodBalance: customerOrderMap.get(customer.id) || 0
+      }))
+      .filter(customer => customer.periodBalance > 0);
+
+    return result;
+  }, [customers, ordersInPeriod]);
+
+  // Set header right
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerCalendarButton}
+          onPress={() => setShowCalendarModal(true)}
+        >
+          <Calendar size={16} color="#F97316" strokeWidth={2} />
+          <Text style={styles.headerDateText} numberOfLines={1}>
+            {getDateDisplayText()}
+          </Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, startDate, endDate]);
+
+  // Filter customers based on search
+  const filteredCustomers = useMemo(() => {
+    return customersWithBalance.filter(customer => {
+      const query = searchQuery.toLowerCase().trim();
+      if (!query) return true;
+
+      const nameMatch = customer.name.toLowerCase().includes(query);
+      const numberMatch = customer.customerNumber.toString().includes(query);
+      const emailMatch = customer.email.toLowerCase().includes(query);
+
+      return nameMatch || numberMatch || emailMatch;
+    });
+  }, [customersWithBalance, searchQuery]);
+
+  const totalOutstanding = useMemo(() => {
+    return filteredCustomers.reduce((sum, customer) => sum + customer.periodBalance, 0);
+  }, [filteredCustomers]);
+
+  const getCustomerOrders = (customerId: string) => {
+    return ordersInPeriod.filter(order => order.customerId === customerId);
+  };
+
+  const handlePayment = (customer: Customer & { periodBalance: number }) => {
     setSelectedCustomer(customer);
-    setPaymentAmount(customer.monthlyBalance.toString());
+    setPaymentAmount(customer.periodBalance.toString());
     setShowPaymentModal(true);
   };
 
-  // Process payment
   const processPayment = async () => {
     if (!selectedCustomer) return;
 
     const amount = parseFloat(paymentAmount);
-    
+    const customerBalance = (selectedCustomer as any).periodBalance;
+
     if (isNaN(amount) || amount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
       return;
     }
 
-    if (amount > selectedCustomer.monthlyBalance) {
+    if (amount > customerBalance) {
       Alert.alert('Amount Too High', 'Payment amount cannot exceed outstanding balance');
       return;
     }
@@ -74,7 +240,7 @@ export default function MonthlyBillsScreen() {
       Alert.alert(
         'Payment Successful! ✅',
         `${formatCurrency(amount)} paid by ${selectedCustomer.name}\n${
-          newBalance > 0 
+          newBalance > 0
             ? `Remaining balance: ${formatCurrency(newBalance)}`
             : 'Balance cleared!'
         }`,
@@ -97,15 +263,6 @@ export default function MonthlyBillsScreen() {
     }
   };
 
-  // Get current month
-  const getCurrentMonth = () => {
-    return new Date().toLocaleDateString('en-US', { 
-      month: 'long', 
-      year: 'numeric' 
-    });
-  };
-
-  // 🆕 Generate Professional Table PDF
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
 
@@ -116,297 +273,106 @@ export default function MonthlyBillsScreen() {
         day: 'numeric'
       });
 
-      // Generate HTML for PDF with TABLE layout
       const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="utf-8">
-          <title>Monthly Billing Report - ${getCurrentMonth()}</title>
+          <title>Billing Report - ${getDateDisplayText()}</title>
           <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            @page { margin: 20mm; }
+            body { font-family: 'Helvetica', 'Arial', sans-serif; color: #1F2937; line-height: 1.6; font-size: 12pt; }
             
-            body {
-              font-family: 'Arial', sans-serif;
-              padding: 40px;
-              color: #1F2937;
-              line-height: 1.6;
-            }
+            .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 4px solid #F97316; }
+            .restaurant-name { font-size: 32pt; font-weight: 700; color: #1F2937; margin-bottom: 8px; letter-spacing: 0.5px; }
+            .report-title { font-size: 16pt; color: #6B7280; margin-bottom: 12px; font-weight: 500; }
+            .report-meta { font-size: 10pt; color: #9CA3AF; display: flex; justify-content: center; gap: 20px; }
+            .report-meta span { padding: 4px 12px; background: #F3F4F6; border-radius: 4px; }
             
-            .header {
-              text-align: center;
-              margin-bottom: 40px;
-              border-bottom: 3px solid #F97316;
-              padding-bottom: 25px;
-            }
+            .customer-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+            .customer-table thead { background: linear-gradient(to bottom, #F97316, #EA580C); color: white; }
+            .customer-table th { padding: 12px 16px; text-align: left; font-size: 10pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+            .customer-table th:first-child { width: 40px; text-align: center; }
+            .customer-table th:last-child { text-align: right; width: 140px; }
+            .customer-table tbody tr { border-bottom: 1px solid #E5E7EB; }
+            .customer-table tbody tr:nth-child(even) { background: #F9FAFB; }
+            .customer-table td { padding: 14px 16px; font-size: 10pt; vertical-align: top; }
+            .customer-table td:first-child { text-align: center; font-weight: 600; color: #6B7280; font-size: 11pt; }
+            .customer-table td:last-child { text-align: right; font-weight: 700; color: #F97316; font-size: 12pt; }
             
-            .restaurant-name {
-              font-size: 36px;
-              font-weight: bold;
-              color: #1F2937;
-              margin-bottom: 10px;
-              letter-spacing: 1px;
-            }
+            .customer-name { font-size: 11pt; font-weight: 600; color: #1F2937; margin-bottom: 4px; }
+            .customer-contact { font-size: 9pt; color: #6B7280; line-height: 1.6; margin-bottom: 2px; }
+            .customer-badge { display: inline-block; background: #F97316; color: white; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 600; margin-top: 4px; }
             
-            .report-title {
-              font-size: 20px;
-              color: #6B7280;
-              margin-bottom: 8px;
-              font-weight: 600;
-            }
+            .total-row { background: linear-gradient(to bottom, #FEF3E2, #FED7AA) !important; border-top: 3px solid #F97316 !important; }
+            .total-row td { padding: 16px !important; font-weight: 700 !important; }
+            .total-label { text-align: right !important; font-size: 12pt !important; text-transform: uppercase; letter-spacing: 1px; color: #1F2937 !important; }
+            .total-amount { font-size: 18pt !important; color: #000000 !important; }
             
-            .report-date {
-              font-size: 14px;
-              color: #9CA3AF;
-            }
-            
-            .summary-section {
-              display: flex;
-              justify-content: space-around;
-              margin-bottom: 35px;
-              padding: 20px;
-              background: #FEF3E2;
-              border-radius: 8px;
-            }
-            
-            .summary-item {
-              text-align: center;
-            }
-            
-            .summary-label {
-              font-size: 14px;
-              color: #6B7280;
-              margin-bottom: 8px;
-              font-weight: 600;
-            }
-            
-            .summary-value {
-              font-size: 28px;
-              font-weight: bold;
-              color: #F97316;
-            }
-            
-            .table-container {
-              margin-top: 30px;
-              border: 2px solid #E5E7EB;
-              border-radius: 8px;
-              overflow: hidden;
-            }
-            
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-            
-            thead {
-              background: #F97316;
-              color: white;
-            }
-            
-            th {
-              padding: 15px 12px;
-              text-align: left;
-              font-size: 14px;
-              font-weight: bold;
-              border-bottom: 2px solid #E5E7EB;
-            }
-            
-            th:first-child {
-              width: 5%;
-              text-align: center;
-            }
-            
-            th:nth-child(2) {
-              width: 50%;
-            }
-            
-            th:last-child {
-              width: 20%;
-              text-align: right;
-            }
-            
-            tbody tr {
-              border-bottom: 1px solid #E5E7EB;
-            }
-            
-            tbody tr:nth-child(even) {
-              background: #F9FAFB;
-            }
-            
-            tbody tr:hover {
-              background: #FEF3E2;
-            }
-            
-            td {
-              padding: 16px 12px;
-              font-size: 13px;
-            }
-            
-            td:first-child {
-              text-align: center;
-              font-weight: bold;
-              color: #6B7280;
-            }
-            
-            .customer-details {
-              line-height: 1.8;
-            }
-            
-            .customer-name {
-              font-size: 16px;
-              font-weight: bold;
-              color: #1F2937;
-              margin-bottom: 4px;
-            }
-            
-            .customer-info {
-              font-size: 13px;
-              color: #6B7280;
-              margin-bottom: 2px;
-            }
-            
-            .customer-number {
-              display: inline-block;
-              background: #F97316;
-              color: white;
-              padding: 2px 10px;
-              border-radius: 12px;
-              font-size: 11px;
-              font-weight: bold;
-              margin-top: 4px;
-            }
-            
-            .balance-cell {
-              text-align: right;
-              font-size: 18px;
-              font-weight: bold;
-              color: #F97316;
-            }
-            
-            .total-row {
-              background: #FEF3E2 !important;
-              font-weight: bold;
-            }
-            
-            .total-row td {
-              padding: 18px 12px;
-              border-top: 3px solid #F97316;
-            }
-            
-            .total-label {
-              text-align: right;
-              font-size: 16px;
-              color: #1F2937;
-            }
-            
-            .total-amount {
-              text-align: right;
-              font-size: 22px;
-              font-weight: bold;
-              color: #F97316;
-            }
-            
-            .footer {
-              margin-top: 50px;
-              text-align: center;
-              padding-top: 25px;
-              border-top: 2px solid #E5E7EB;
-            }
-            
-            .footer-text {
-              font-size: 12px;
-              color: #6B7280;
-              margin-bottom: 8px;
-            }
-            
-            @media print {
-              body {
-                padding: 20px;
-              }
-            }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #E5E7EB; text-align: center; }
+            .footer-text { font-size: 9pt; color: #6B7280; line-height: 1.8; margin-bottom: 4px; }
+            .footer-text.primary { font-weight: 600; color: #1F2937; }
           </style>
         </head>
         <body>
-          <!-- Header -->
           <div class="header">
             <div class="restaurant-name">Hiil Restaurant</div>
-            <div class="report-title">Monthly Customer Billing Report</div>
-            <div class="report-date">${getCurrentMonth()}</div>
-            <div class="report-date">Generated on ${currentDate}</div>
-          </div>
-
-          <!-- Summary Section -->
-          <div class="summary-section">
-            <div class="summary-item">
-              <div class="summary-label">Total Customers</div>
-              <div class="summary-value">${customersWithBalance.length}</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">Total Outstanding</div>
-              <div class="summary-value">${formatCurrency(totalOutstanding)}</div>
+            <div class="report-title">Customer Billing Report</div>
+            <div class="report-meta">
+              <span>📅 ${getDateDisplayText()}</span>
+              <span>📄 Generated ${currentDate}</span>
             </div>
           </div>
 
-          <!-- Customer Table -->
-          <div class="table-container">
-            <table>
-              <thead>
+          <table class="customer-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Customer Information</th>
+                <th>Outstanding Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${customersWithBalance.map((customer, index) => `
                 <tr>
-                  <th>#</th>
-                  <th>Customer Details</th>
-                  <th>Outstanding Balance</th>
+                  <td>${index + 1}</td>
+                  <td>
+                    <div class="customer-name">
+                      ${customer.name}
+                      <span class="customer-badge">#${customer.customerNumber}</span>
+                    </div>
+                    <div class="customer-contact">📧 ${customer.email}</div>
+                    ${customer.phone ? `<div class="customer-contact">📱 ${customer.phone}</div>` : ''}
+                  </td>
+                  <td>${formatCurrency(customer.periodBalance)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${customersWithBalance.map((customer, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>
-                      <div class="customer-details">
-                        <div class="customer-name">${customer.name}</div>
-                        <div class="customer-info">📧 ${customer.email}</div>
-                        ${customer.phone ? `<div class="customer-info">📱 ${customer.phone}</div>` : ''}
-                        <span class="customer-number">#${customer.customerNumber}</span>
-                      </div>
-                    </td>
-                    <td class="balance-cell">${formatCurrency(customer.monthlyBalance)}</td>
-                  </tr>
-                `).join('')}
-                
-                <!-- Total Row -->
-                <tr class="total-row">
-                  <td colspan="2" class="total-label">TOTAL OUTSTANDING</td>
-                  <td class="total-amount">${formatCurrency(totalOutstanding)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+              `).join('')}
+              
+              <tr class="total-row">
+                <td colspan="2" class="total-label">Total Outstanding</td>
+                <td class="total-amount">${formatCurrency(totalOutstanding)}</td>
+              </tr>
+            </tbody>
+          </table>
 
-          <!-- Footer -->
           <div class="footer">
-            <p class="footer-text">This is an automated report generated by Hiil Restaurant Management System</p>
+            <p class="footer-text primary">This is an automated report generated by Hiil Restaurant Management System</p>
             <p class="footer-text">Report generated on ${currentDate}</p>
-            <p class="footer-text">For inquiries, please contact the restaurant administration</p>
           </div>
         </body>
         </html>
       `;
 
-      // Generate PDF
       const { uri } = await Print.printToFileAsync({
         html: htmlContent,
         base64: false
       });
 
-      // Share PDF
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
-          dialogTitle: `Monthly Bills Report - ${getCurrentMonth()}`,
+          dialogTitle: `Billing Report - ${getDateDisplayText()}`,
           UTI: 'com.adobe.pdf'
         });
       } else {
@@ -421,37 +387,93 @@ export default function MonthlyBillsScreen() {
     }
   };
 
+  // Render calendar grid
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentCalendarMonth);
+    const firstDay = getFirstDayOfMonth(currentCalendarMonth);
+    const days = [];
+
+    // Empty cells before first day
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<View key={`empty-${i}`} style={styles.calendarDayEmpty} />);
+    }
+
+    // Days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const isInRange = isDateInRange(day);
+      const isStart = isDateStart(day);
+      const isEnd = isDateEnd(day);
+      const isToday = new Date().getDate() === day &&
+        new Date().getMonth() === currentCalendarMonth.getMonth() &&
+        new Date().getFullYear() === currentCalendarMonth.getFullYear();
+
+      days.push(
+        <TouchableOpacity
+          key={day}
+          style={[
+            styles.calendarDay,
+            isInRange && styles.calendarDayInRange,
+            (isStart || isEnd) && styles.calendarDaySelected,
+            isToday && !isInRange && styles.calendarDayToday,
+          ]}
+          onPress={() => handleDateSelect(day)}
+        >
+          <Text style={[
+            styles.calendarDayText,
+            (isStart || isEnd) && styles.calendarDayTextSelected,
+            isToday && !isInRange && styles.calendarDayTextToday,
+          ]}>
+            {day}
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return days;
+  };
+
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          
-          <Text style={styles.subtitle}>{getCurrentMonth()}</Text>
-        </View>
-        <View style={styles.totalBadge}>
-          <Text style={styles.totalLabel}>Total Outstanding</Text>
-          <Text style={styles.totalAmount}>{formatCurrency(totalOutstanding)}</Text>
-        </View>
-      </View>
-
       <ScrollView
-        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <Search size={20} color="#64748B" strokeWidth={2} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name, number, or email..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#94A3B8"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <X size={20} color="#64748B" strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {searchQuery && (
+            <Text style={styles.searchResults}>
+              {filteredCustomers.length} result{filteredCustomers.length !== 1 ? 's' : ''} found
+            </Text>
+          )}
+        </View>
+
         {/* Summary Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Receipt size={24} color="#10B981" strokeWidth={2} />
+            <Receipt size={24} color="#0EA5E9" strokeWidth={2} />
             <View style={styles.statInfo}>
-              <Text style={styles.statValue}>{customersWithBalance.length}</Text>
+              <Text style={styles.statValue}>{filteredCustomers.length}</Text>
               <Text style={styles.statLabel}>Customers</Text>
             </View>
           </View>
 
           <View style={styles.statCard}>
-            <DollarSign size={24} color="#F97316" strokeWidth={2} />
+            <DollarSign size={24} color="#0284C7" strokeWidth={2} />
             <View style={styles.statInfo}>
               <Text style={styles.statValue}>{formatCurrency(totalOutstanding)}</Text>
               <Text style={styles.statLabel}>Outstanding</Text>
@@ -485,17 +507,27 @@ export default function MonthlyBillsScreen() {
         {/* Customer Bills */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Outstanding Balances</Text>
-          
-          {customersWithBalance.length === 0 ? (
+
+          {filteredCustomers.length === 0 ? (
             <View style={styles.emptyState}>
-              <CheckCircle size={64} color="#10B981" strokeWidth={1} />
-              <Text style={styles.emptyText}>All Clear!</Text>
-              <Text style={styles.emptySubtext}>No outstanding balances at the moment</Text>
+              {searchQuery ? (
+                <>
+                  <Search size={64} color="#CBD5E1" strokeWidth={1} />
+                  <Text style={styles.emptyText}>No results found</Text>
+                  <Text style={styles.emptySubtext}>Try searching with a different term</Text>
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={64} color="#0EA5E9" strokeWidth={1} />
+                  <Text style={styles.emptyText}>All Clear!</Text>
+                  <Text style={styles.emptySubtext}>No outstanding balances for selected period</Text>
+                </>
+              )}
             </View>
           ) : (
-            customersWithBalance.map((customer) => {
+            filteredCustomers.map((customer) => {
               const customerOrders = getCustomerOrders(customer.id);
-              
+
               return (
                 <View key={customer.id} style={styles.billCard}>
                   <View style={styles.billHeader}>
@@ -520,8 +552,8 @@ export default function MonthlyBillsScreen() {
 
                   <View style={styles.balanceSection}>
                     <View style={styles.balanceRow}>
-                      <Text style={styles.balanceLabel}>Outstanding Balance</Text>
-                      <Text style={styles.balanceAmount}>{formatCurrency(customer.monthlyBalance)}</Text>
+                      <Text style={styles.balanceLabel}>Period Balance</Text>
+                      <Text style={styles.balanceAmount}>{formatCurrency(customer.periodBalance)}</Text>
                     </View>
                     <View style={styles.balanceRow}>
                       <Text style={styles.totalSpentLabel}>Total Spent</Text>
@@ -533,10 +565,10 @@ export default function MonthlyBillsScreen() {
                     <View style={styles.orderSummaryHeader}>
                       <Calendar size={16} color="#6B7280" strokeWidth={2} />
                       <Text style={styles.orderSummaryTitle}>
-                        {customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''} this month
+                        {customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''} in period
                       </Text>
                     </View>
-                    
+
                     {customerOrders.slice(0, 3).map((order) => (
                       <View key={order.id} style={styles.orderItem}>
                         <Text style={styles.orderDate}>
@@ -546,7 +578,7 @@ export default function MonthlyBillsScreen() {
                         <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
                       </View>
                     ))}
-                    
+
                     {customerOrders.length > 3 && (
                       <Text style={styles.moreOrders}>
                         + {customerOrders.length - 3} more order{customerOrders.length - 3 !== 1 ? 's' : ''}
@@ -569,6 +601,79 @@ export default function MonthlyBillsScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Calendar Modal */}
+      <Modal
+        visible={showCalendarModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCalendarModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.calendarModal}>
+            <View style={styles.calendarHeader}>
+              <Text style={styles.calendarTitle}>Select Date Range</Text>
+              <TouchableOpacity onPress={() => setShowCalendarModal(false)}>
+                <X size={24} color="#6B7280" strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarMonthNav}>
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                onPress={() => navigateCalendarMonth(-1)}
+              >
+                <ChevronLeft size={20} color="#1F2937" strokeWidth={2} />
+              </TouchableOpacity>
+
+              <Text style={styles.calendarMonthText}>
+                {currentCalendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                onPress={() => navigateCalendarMonth(1)}
+              >
+                <ChevronRight size={20} color="#1F2937" strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarWeekDays}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <Text key={day} style={styles.calendarWeekDayText}>{day}</Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {renderCalendar()}
+            </View>
+
+            <View style={styles.calendarActions}>
+              {(startDate || endDate) && (
+                <TouchableOpacity
+                  style={styles.calendarClearButton}
+                  onPress={clearSelection}
+                >
+                  <Text style={styles.calendarClearText}>Clear Selection</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.calendarApplyButton}
+                onPress={() => setShowCalendarModal(false)}
+              >
+                <Text style={styles.calendarApplyText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isSelectingRange && startDate && (
+              <Text style={styles.calendarHint}>
+                Select end date (tap same date for single day)
+              </Text>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Payment Modal */}
       <Modal
@@ -602,9 +707,10 @@ export default function MonthlyBillsScreen() {
                 <View style={styles.modalBalanceInfo}>
                   <Text style={styles.modalBalanceLabel}>Outstanding Balance</Text>
                   <Text style={styles.modalBalanceAmount}>
-                    {formatCurrency(selectedCustomer.monthlyBalance)}
+                    {formatCurrency((selectedCustomer as any).periodBalance)}
                   </Text>
                 </View>
+
 
                 <View style={styles.paymentInputContainer}>
                   <Text style={styles.inputLabel}>Payment Amount</Text>
@@ -654,47 +760,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  headerRight: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginRight: 16,
+    gap: 6,
   },
-  title: {
-    fontSize: 32,
+  headerNavButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+  },
+  headerMonthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3E2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  headerMonthText: {
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  totalBadge: {
-    backgroundColor: '#FEF3E2',
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'flex-end',
-  },
-  totalLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  totalAmount: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#F97316',
-  },
-  scrollView: {
-    flex: 1,
   },
   scrollContent: {
     paddingTop: 16,
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#0F172A',
+  },
+  searchResults: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 8,
+    marginLeft: 4,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -714,6 +837,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0EA5E9',
   },
   statInfo: {
     marginLeft: 12,
@@ -732,16 +857,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pdfButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#0EA5E9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
-    shadowColor: '#000',
+    shadowColor: '#0EA5E9',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 5,
   },
@@ -897,7 +1022,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   payButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#0EA5E9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1013,7 +1138,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: '#0EA5E9',
   },
   paymentInput: {
     flex: 1,
@@ -1042,7 +1167,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#10B981',
+    backgroundColor: '#0EA5E9',
     alignItems: 'center',
   },
   confirmButtonText: {
@@ -1053,4 +1178,146 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-}); 
+  calendarClearButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  calendarClearText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  calendarApplyButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#0EA5E9',
+    alignItems: 'center',
+  },
+  calendarApplyText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  calendarHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  calendarWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  calendarWeekDayText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    width: '14.28%',
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  calendarDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  calendarDayEmpty: {
+    width: '14.28%',
+    aspectRatio: 1,
+  },
+  calendarDayInRange: {
+    backgroundColor: '#FED7AA',
+  },
+  calendarDaySelected: {
+    backgroundColor: '#F97316',
+    borderRadius: 8,
+  },
+  calendarDayToday: {
+    borderWidth: 2,
+    borderColor: '#0EA5E9',
+    borderRadius: 8,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  calendarDayTextSelected: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  calendarDayTextToday: {
+    color: '#0EA5E9',
+    fontWeight: 'bold',
+  },
+  calendarModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  calendarTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  calendarMonthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  calendarNavButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  calendarMonthText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  calendarActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  headerCalendarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FEF3E2',
+    borderRadius: 8,
+  },
+  headerDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F97316',
+    maxWidth: 150,
+  },
+});

@@ -1,3 +1,4 @@
+// appcontext
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { CartItem, Order, Dish, Customer, MonthlyBill } from '../types';
 import { supabase } from "../app/lib/supabase";
