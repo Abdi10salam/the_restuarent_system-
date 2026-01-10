@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback, Keyboard, ScrollView
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ChefHat, Mail, Lock, ArrowLeft } from 'lucide-react-native';
 import { useSignIn, useSignUp, useClerk } from '@clerk/clerk-expo';
@@ -88,7 +99,6 @@ export default function LoginScreen() {
           setIsLoading(false);
           return;
         }
-
         // First time login - send OTP
         if (existingCustomer.is_first_login || !existingCustomer.clerk_user_id) {
           console.log('First time user - starting OTP flow');
@@ -270,111 +280,117 @@ try {
   };
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-        <ArrowLeft size={24} color="#6B7280" strokeWidth={2} />
-      </TouchableOpacity>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <KeyboardAvoidingView style={{ flex: 1 }}  behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView style={{ flex: 1 }}>
+          <View style={styles.container}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <ArrowLeft size={24} color="#6B7280" strokeWidth={2} />
+            </TouchableOpacity>
 
-      <View style={styles.header}>
-        <View style={[styles.iconContainer, { backgroundColor: `${portalColor}20` }]}>
-          <ChefHat size={40} color={portalColor} strokeWidth={2} />
-        </View>
-        <Text style={styles.title}>{portalName} Login</Text>
-        <Text style={styles.subtitle}>
-          {isCustomer
-            ? 'Access your account to place orders'
-            : 'Manage restaurant operations'
-          }
-        </Text>
-      </View>
+            <View style={styles.header}>
+              <View style={[styles.iconContainer, { backgroundColor: `${portalColor}20` }]}>
+                <ChefHat size={40} color={portalColor} strokeWidth={2} />
+              </View>
+              <Text style={styles.title}>{portalName} Login</Text>
+              <Text style={styles.subtitle}>
+                {isCustomer
+                  ? 'Access your account to place orders'
+                  : 'Manage restaurant operations'
+                }
+              </Text>
+            </View>
 
-      <View style={styles.form}>
-        <View style={styles.inputContainer}>
-          <Mail size={20} color="#6B7280" strokeWidth={2} />
-          <TextInput
-            style={styles.input}
-            placeholder="Email address"
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              if (isCustomer) {
-                checkCustomerStatus(text);
-              }
-            }}
-            onBlur={() => {
-              if (isCustomer && email) {
-                checkCustomerStatus(email);
-              }
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isLoading}
-          />
-        </View>
+            <View style={styles.form}>
+              <View style={styles.inputContainer}>
+                <Mail size={20} color="#6B7280" strokeWidth={2} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email address"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (isCustomer) {
+                      checkCustomerStatus(text);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (isCustomer && email) {
+                      checkCustomerStatus(email);
+                    }
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </View>
 
-        {isCustomer && customerExists !== null && (
-          <Text style={[
-            styles.helperText,
-            customerExists === false && styles.errorText,
-            customerExists === true && styles.successText
-          ]}>
-            {customerExists === false && '⚠️ Account not found. Contact your admin.'}
-            {customerExists === true && isFirstLogin && '✅ Account found! You\'ll receive an OTP.'}
-            {customerExists === true && !isFirstLogin && '✅ Welcome back! Enter your password.'}
-          </Text>
-        )}
+              {isCustomer && customerExists !== null && (
+                <Text style={[
+                  styles.helperText,
+                  customerExists === false && styles.errorText,
+                  customerExists === true && styles.successText
+                ]}>
+                  {customerExists === false && '⚠️ Account not found. Contact your admin.'}
+                  {customerExists === true && isFirstLogin && '✅ Account found! You\'ll receive an OTP.'}
+                  {customerExists === true && !isFirstLogin && '✅ Welcome back! Enter your password.'}
+                </Text>
+              )}
 
-        {(!isCustomer || (isCustomer && customerExists && !isFirstLogin)) && (
-          <View style={styles.inputContainer}>
-            <Lock size={20} color="#6B7280" strokeWidth={2} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!isLoading}
-            />
+              {(!isCustomer || (isCustomer && customerExists && !isFirstLogin)) && (
+                <View style={styles.inputContainer}>
+                  <Lock size={20} color="#6B7280" strokeWidth={2} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    editable={!isLoading}
+                  />
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.loginButton, { backgroundColor: portalColor }, isLoading && styles.disabledButton]}
+                onPress={handleLogin}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.loginButtonText}>Sign In</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.demoButton}
+                onPress={fillDemoCredentials}
+                disabled={isLoading}
+              >
+                <Text style={[styles.demoButtonText, { color: portalColor }]}>
+                  Use Demo Credentials
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Demo Credentials:
+              </Text>
+              <Text style={styles.credentialsText}>
+                {isCustomer
+                  ? 'Email: customer@test.com | Password: password'
+                  : 'Email: admin@test.com | Password: admin'
+                }
+              </Text>
+            </View>
           </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.loginButton, { backgroundColor: portalColor }, isLoading && styles.disabledButton]}
-          onPress={handleLogin}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.demoButton}
-          onPress={fillDemoCredentials}
-          disabled={isLoading}
-        >
-          <Text style={[styles.demoButtonText, { color: portalColor }]}>
-            Use Demo Credentials
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Demo Credentials:
-        </Text>
-        <Text style={styles.credentialsText}>
-          {isCustomer
-            ? 'Email: customer@test.com | Password: password'
-            : 'Email: admin@test.com | Password: admin'
-          }
-        </Text>
-      </View>
-    </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
 
