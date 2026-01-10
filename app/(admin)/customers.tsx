@@ -1,555 +1,753 @@
-// app/(admin)/customers.tsx - HEADER BUTTON VERSION
-import React, { useState, useLayoutEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator, Image } from 'react-native';
-import { Users, DollarSign, Receipt, Plus, Mail, User, CreditCard, Clock, UserCog, X, Phone, Camera, Upload, FileText } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
+// app/(admin)/monthly-bills.tsx - WITH CALENDAR PICKER
+import React, { useState, useLayoutEffect, useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail, Download, FileText, Search, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
-import { Customer } from '../../types';
 import { formatCurrency } from '../../utils/currency';
-import { uploadProfileImage } from './../lib/supabase';
-import { useRouter } from 'expo-router';
+import { Customer } from '../../types';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
-export default function AdminCustomersScreen() {
+export default function MonthlyBillsScreen() {
   const navigation = useNavigation();
-  const { state, addCustomerToSupabase } = useApp();
+  const { state, updateCustomerInSupabase } = useApp();
   const { customers, orders } = state;
-  const router = useRouter();
 
-  const actualCustomers = customers.filter(c => c.role === 'customer');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    profilePhoto: '',
-    role: 'customer' as 'customer' | 'receptionist',
-    paymentType: 'monthly' as 'cash' | 'monthly'
-  });
+  // Calendar state
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [isSelectingRange, setIsSelectingRange] = useState(false);
 
-  // Set header right button
+  // Get date range for filtering
+  const getDateRange = () => {
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start, endDate: end };
+    } else if (startDate) {
+      // Single day selection
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start, endDate: end };
+    } else {
+      // Default to current month
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start, endDate: end };
+    }
+  };
+
+  const dateRange = useMemo(() => getDateRange(), [startDate, endDate]);
+
+  // Get display text for selected dates
+  const getDateDisplayText = () => {
+    if (startDate && endDate && startDate.getTime() !== endDate.getTime()) {
+      return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    } else if (startDate) {
+      return startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    } else {
+      return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+  };
+
+  // Calendar functions
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const handleDateSelect = (day: number) => {
+    const selected = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+
+    if (!isSelectingRange) {
+      // First selection - start new range
+      setStartDate(selected);
+      setEndDate(null);
+      setIsSelectingRange(true);
+    } else {
+      // Second selection - complete range
+      if (selected < startDate!) {
+        // Selected date is before start, swap them
+        setEndDate(startDate);
+        setStartDate(selected);
+      } else {
+        setEndDate(selected);
+      }
+      setIsSelectingRange(false);
+      setShowCalendarModal(false);
+    }
+  };
+
+  const isDateInRange = (day: number) => {
+    if (!startDate) return false;
+    const date = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+
+    if (endDate) {
+      return date >= startDate && date <= endDate;
+    } else {
+      return date.getTime() === startDate.getTime();
+    }
+  };
+
+  const isDateStart = (day: number) => {
+    if (!startDate) return false;
+    const date = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+    return date.getTime() === startDate.getTime();
+  };
+
+  const isDateEnd = (day: number) => {
+    if (!endDate) return false;
+    const date = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+    return date.getTime() === endDate.getTime();
+  };
+
+  const clearSelection = () => {
+    setStartDate(null);
+    setEndDate(null);
+    setIsSelectingRange(false);
+  };
+
+  const navigateCalendarMonth = (direction: number) => {
+    const newDate = new Date(currentCalendarMonth);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentCalendarMonth(newDate);
+  };
+
+  // Filter orders by date range
+  const ordersInPeriod = useMemo(() => {
+    return orders.filter(order => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= dateRange.startDate &&
+        orderDate <= dateRange.endDate &&
+        order.status === 'approved' &&
+        order.paymentType === 'monthly';
+    });
+  }, [orders, dateRange]);
+
+  // Calculate balances for customers
+  const customersWithBalance = useMemo(() => {
+    const customerOrderMap = new Map<string, number>();
+
+    ordersInPeriod.forEach(order => {
+      const currentTotal = customerOrderMap.get(order.customerId) || 0;
+      customerOrderMap.set(order.customerId, currentTotal + order.totalAmount);
+    });
+
+    const result = customers
+      .filter(customer =>
+        customer.paymentType === 'monthly' &&
+        customerOrderMap.has(customer.id)
+      )
+      .map(customer => ({
+        ...customer,
+        periodBalance: customerOrderMap.get(customer.id) || 0
+      }))
+      .filter(customer => customer.periodBalance > 0);
+
+    return result;
+  }, [customers, ordersInPeriod]);
+
+  // Set header right
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: () => (
-        <View style={styles.infoSection}>
-          <Text style={styles.sectionSubtitle}>
-            {actualCustomers.length} customers registered
-          </Text>
-        </View>
-      ),
-
       headerRight: () => (
         <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setShowAddModal(true)}
+          style={styles.headerCalendarButton}
+          onPress={() => setShowCalendarModal(true)}
         >
-          <Plus size={24} color="#FFFFFF" strokeWidth={2} />
+          <Calendar size={16} color="#F97316" strokeWidth={2} />
+          <Text style={styles.headerDateText} numberOfLines={1}>
+            {getDateDisplayText()}
+          </Text>
         </TouchableOpacity>
       ),
     });
-  }, [navigation, actualCustomers.length]);
+  }, [navigation, startDate, endDate]);
 
+  // Filter customers based on search
+  const filteredCustomers = useMemo(() => {
+    return customersWithBalance.filter(customer => {
+      const query = searchQuery.toLowerCase().trim();
+      if (!query) return true;
 
-  const requestPermissions = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Please allow access to your photo library to upload images.');
-      return false;
-    }
-    return true;
+      const nameMatch = customer.name.toLowerCase().includes(query);
+      const numberMatch = customer.customerNumber.toString().includes(query);
+      const emailMatch = customer.email.toLowerCase().includes(query);
+
+      return nameMatch || numberMatch || emailMatch;
+    });
+  }, [customersWithBalance, searchQuery]);
+
+  const totalOutstanding = useMemo(() => {
+    return filteredCustomers.reduce((sum, customer) => sum + customer.periodBalance, 0);
+  }, [filteredCustomers]);
+
+  const getCustomerOrders = (customerId: string) => {
+    return ordersInPeriod.filter(order => order.customerId === customerId);
   };
 
-  const pickProfilePhoto = async () => {
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
+  const handlePayment = (customer: Customer & { periodBalance: number }) => {
+    setSelectedCustomer(customer);
+    setPaymentAmount(customer.periodBalance.toString());
+    setShowPaymentModal(true);
+  };
+
+  const processPayment = async () => {
+    if (!selectedCustomer) return;
+
+    const amount = parseFloat(paymentAmount);
+    const customerBalance = (selectedCustomer as any).periodBalance;
+
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
+      return;
+    }
+
+    if (amount > customerBalance) {
+      Alert.alert('Amount Too High', 'Payment amount cannot exceed outstanding balance');
+      return;
+    }
+
+    setIsProcessing(true);
 
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+      const newBalance = selectedCustomer.monthlyBalance - amount;
+
+      await updateCustomerInSupabase(selectedCustomer.id, {
+        monthlyBalance: newBalance
       });
-
-      if (!result.canceled && result.assets[0]) {
-        const localUri = result.assets[0].uri;
-        setNewCustomer(prev => ({ ...prev, profilePhoto: localUri }));
-        setIsUploadingPhoto(true);
-
-        const imageUrl = await uploadProfileImage(localUri, newCustomer.email || 'user');
-
-        if (imageUrl) {
-          setNewCustomer(prev => ({ ...prev, profilePhoto: imageUrl }));
-          Alert.alert('Success', 'Photo uploaded successfully!');
-        } else {
-          setNewCustomer(prev => ({ ...prev, profilePhoto: '' }));
-          Alert.alert('Error', 'Failed to upload photo. Please try again.');
-        }
-
-        setIsUploadingPhoto(false);
-      }
-    } catch (error) {
-      console.error('Error picking photo:', error);
-      Alert.alert('Error', 'Failed to pick photo.');
-      setIsUploadingPhoto(false);
-    }
-  };
-
-  const takeProfilePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Please allow access to your camera to take photos.');
-      return;
-    }
-
-    try {
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const localUri = result.assets[0].uri;
-        setNewCustomer(prev => ({ ...prev, profilePhoto: localUri }));
-        setIsUploadingPhoto(true);
-
-        const imageUrl = await uploadProfileImage(localUri, newCustomer.email || 'user');
-
-        if (imageUrl) {
-          setNewCustomer(prev => ({ ...prev, profilePhoto: imageUrl }));
-          Alert.alert('Success', 'Photo uploaded successfully!');
-        } else {
-          setNewCustomer(prev => ({ ...prev, profilePhoto: '' }));
-          Alert.alert('Error', 'Failed to upload photo. Please try again.');
-        }
-
-        setIsUploadingPhoto(false);
-      }
-    } catch (error) {
-      console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo.');
-      setIsUploadingPhoto(false);
-    }
-  };
-
-  const showPhotoOptions = () => {
-    Alert.alert(
-      'Profile Photo',
-      'Choose an option',
-      [
-        { text: 'Take Photo', onPress: takeProfilePhoto },
-        { text: 'Choose from Gallery', onPress: pickProfilePhoto },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
-
-  const handleAddCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.email) {
-      Alert.alert('Error', 'Please fill in name and email');
-      return;
-    }
-
-    if (!newCustomer.email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    if (newCustomer.phone && !/^[0-9+\s()-]+$/.test(newCustomer.phone)) {
-      Alert.alert('Error', 'Please enter a valid phone number');
-      return;
-    }
-
-    const existingCustomer = customers.find(c => c.email === newCustomer.email);
-    if (existingCustomer) {
-      Alert.alert('Error', 'A user with this email already exists');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const customer: Customer = {
-        id: Date.now().toString(),
-        name: newCustomer.name,
-        email: newCustomer.email,
-        phone: newCustomer.phone || undefined,
-        profilePhoto: newCustomer.profilePhoto || undefined,
-        customerNumber: 0,
-        role: newCustomer.role,
-        paymentType: newCustomer.paymentType,
-        monthlyBalance: 0,
-        totalSpent: 0,
-        isFirstLogin: true,
-        registeredAt: new Date().toISOString(),
-      };
-
-      const customerNumber = await addCustomerToSupabase(customer, 'admin@test.com');
-
-      setNewCustomer({
-        name: '',
-        email: '',
-        phone: '',
-        profilePhoto: '',
-        role: 'customer',
-        paymentType: 'monthly'
-      });
-      setShowAddModal(false);
 
       Alert.alert(
-        'Success',
-        `${newCustomer.role === 'receptionist' ? 'Receptionist' : 'Customer'} registered!\nAccount Number: ${customerNumber}\nThey can now login with ${newCustomer.email}`,
-        [{ text: 'OK' }]
+        'Payment Successful! ✅',
+        `${formatCurrency(amount)} paid by ${selectedCustomer.name}\n${
+          newBalance > 0
+            ? `Remaining balance: ${formatCurrency(newBalance)}`
+            : 'Balance cleared!'
+        }`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setShowPaymentModal(false);
+              setSelectedCustomer(null);
+              setPaymentAmount('');
+            }
+          }
+        ]
       );
-    } catch (err: any) {
-      console.error('Error creating user:', err);
-      Alert.alert('Error', err.message || 'Failed to register user. Please try again.');
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
     } finally {
-      setIsSubmitting(false);
+      setIsProcessing(false);
     }
   };
 
-  const handleGenerateReport = async () => {
-    const customersWithBalance = actualCustomers.filter(
-      customer => customer.paymentType === 'monthly' && customer.monthlyBalance > 0
-    );
+  const generatePDFReport = async () => {
+    setIsGeneratingPDF(true);
 
-    if (customersWithBalance.length === 0) {
-      Alert.alert(
-        'No Outstanding Balances',
-        'There are no customers with outstanding monthly balances at the moment.',
-        [{ text: 'OK' }]
+    try {
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Billing Report - ${getDateDisplayText()}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            @page { margin: 20mm; }
+            body { font-family: 'Helvetica', 'Arial', sans-serif; color: #1F2937; line-height: 1.6; font-size: 12pt; }
+            
+            .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 4px solid #F97316; }
+            .restaurant-name { font-size: 32pt; font-weight: 700; color: #1F2937; margin-bottom: 8px; letter-spacing: 0.5px; }
+            .report-title { font-size: 16pt; color: #6B7280; margin-bottom: 12px; font-weight: 500; }
+            .report-meta { font-size: 10pt; color: #9CA3AF; display: flex; justify-content: center; gap: 20px; }
+            .report-meta span { padding: 4px 12px; background: #F3F4F6; border-radius: 4px; }
+            
+            .customer-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+            .customer-table thead { background: linear-gradient(to bottom, #F97316, #EA580C); color: white; }
+            .customer-table th { padding: 12px 16px; text-align: left; font-size: 10pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+            .customer-table th:first-child { width: 40px; text-align: center; }
+            .customer-table th:last-child { text-align: right; width: 140px; }
+            .customer-table tbody tr { border-bottom: 1px solid #E5E7EB; }
+            .customer-table tbody tr:nth-child(even) { background: #F9FAFB; }
+            .customer-table td { padding: 14px 16px; font-size: 10pt; vertical-align: top; }
+            .customer-table td:first-child { text-align: center; font-weight: 600; color: #6B7280; font-size: 11pt; }
+            .customer-table td:last-child { text-align: right; font-weight: 700; color: #F97316; font-size: 12pt; }
+            
+            .customer-name { font-size: 11pt; font-weight: 600; color: #1F2937; margin-bottom: 4px; }
+            .customer-contact { font-size: 9pt; color: #6B7280; line-height: 1.6; margin-bottom: 2px; }
+            .customer-badge { display: inline-block; background: #F97316; color: white; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 600; margin-top: 4px; }
+            
+            .total-row { background: linear-gradient(to bottom, #FEF3E2, #FED7AA) !important; border-top: 3px solid #F97316 !important; }
+            .total-row td { padding: 16px !important; font-weight: 700 !important; }
+            .total-label { text-align: right !important; font-size: 12pt !important; text-transform: uppercase; letter-spacing: 1px; color: #1F2937 !important; }
+            .total-amount { font-size: 18pt !important; color: #000000 !important; }
+            
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #E5E7EB; text-align: center; }
+            .footer-text { font-size: 9pt; color: #6B7280; line-height: 1.8; margin-bottom: 4px; }
+            .footer-text.primary { font-weight: 600; color: #1F2937; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="restaurant-name">Hiil Restaurant</div>
+            <div class="report-title">Customer Billing Report</div>
+            <div class="report-meta">
+              <span>📅 ${getDateDisplayText()}</span>
+              <span>📄 Generated ${currentDate}</span>
+            </div>
+          </div>
+
+          <table class="customer-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Customer Information</th>
+                <th>Outstanding Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${customersWithBalance.map((customer, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>
+                    <div class="customer-name">
+                      ${customer.name}
+                      <span class="customer-badge">#${customer.customerNumber}</span>
+                    </div>
+                    <div class="customer-contact">📧 ${customer.email}</div>
+                    ${customer.phone ? `<div class="customer-contact">📱 ${customer.phone}</div>` : ''}
+                  </td>
+                  <td>${formatCurrency(customer.periodBalance)}</td>
+                </tr>
+              `).join('')}
+              
+              <tr class="total-row">
+                <td colspan="2" class="total-label">Total Outstanding</td>
+                <td class="total-amount">${formatCurrency(totalOutstanding)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p class="footer-text primary">This is an automated report generated by Hiil Restaurant Management System</p>
+            <p class="footer-text">Report generated on ${currentDate}</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
+        base64: false
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Billing Report - ${getDateDisplayText()}`,
+          UTI: 'com.adobe.pdf'
+        });
+      } else {
+        Alert.alert('Success', 'PDF generated successfully!');
+      }
+
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      Alert.alert('Error', 'Failed to generate PDF report.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  // Render calendar grid
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentCalendarMonth);
+    const firstDay = getFirstDayOfMonth(currentCalendarMonth);
+    const days = [];
+
+    // Empty cells before first day
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<View key={`empty-${i}`} style={styles.calendarDayEmpty} />);
+    }
+
+    // Days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const isInRange = isDateInRange(day);
+      const isStart = isDateStart(day);
+      const isEnd = isDateEnd(day);
+      const isToday = new Date().getDate() === day &&
+        new Date().getMonth() === currentCalendarMonth.getMonth() &&
+        new Date().getFullYear() === currentCalendarMonth.getFullYear();
+
+      days.push(
+        <TouchableOpacity
+          key={day}
+          style={[
+            styles.calendarDay,
+            isInRange && styles.calendarDayInRange,
+            (isStart || isEnd) && styles.calendarDaySelected,
+            isToday && !isInRange && styles.calendarDayToday,
+          ]}
+          onPress={() => handleDateSelect(day)}
+        >
+          <Text style={[
+            styles.calendarDayText,
+            (isStart || isEnd) && styles.calendarDayTextSelected,
+            isToday && !isInRange && styles.calendarDayTextToday,
+          ]}>
+            {day}
+          </Text>
+        </TouchableOpacity>
       );
-      return;
     }
 
-    Alert.alert(
-      'Generate Monthly Report',
-      `Found ${customersWithBalance.length} customer${customersWithBalance.length !== 1 ? 's' : ''} with outstanding balances.\n\nNavigate to Monthly Bills tab to view the report and download PDF.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'View Report',
-          onPress: () => router.push('/(admin)/monthly-bills')
-        }
-      ]
-    );
-  };
-
-  const getCustomerStats = (customerId: string) => {
-    const customerOrders = orders.filter(order => order.customerId === customerId);
-    const completedOrders = customerOrders.filter(order => order.status === 'approved');
-    return {
-      totalOrders: completedOrders.length,
-      pendingOrders: customerOrders.filter(order => order.status === 'pending').length,
-      revenue: completedOrders.reduce((sum, o) => sum + o.totalAmount, 0),
-    };
+    return days;
   };
 
   return (
     <View style={styles.container}>
-      {/* Removed old header - now using navigation header */}
-
       <ScrollView
-        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <Search size={20} color="#64748B" strokeWidth={2} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name, number, or email..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#94A3B8"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <X size={20} color="#64748B" strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {searchQuery && (
+            <Text style={styles.searchResults}>
+              {filteredCustomers.length} result{filteredCustomers.length !== 1 ? 's' : ''} found
+            </Text>
+          )}
+        </View>
 
+        {/* Summary Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Receipt size={24} color="#0EA5E9" strokeWidth={2} />
+            <View style={styles.statInfo}>
+              <Text style={styles.statValue}>{filteredCustomers.length}</Text>
+              <Text style={styles.statLabel}>Customers</Text>
+            </View>
+          </View>
 
-        {actualCustomers.map((customer) => {
-          const stats = getCustomerStats(customer.id);
+          <View style={styles.statCard}>
+            <DollarSign size={24} color="#0284C7" strokeWidth={2} />
+            <View style={styles.statInfo}>
+              <Text style={styles.statValue}>{formatCurrency(totalOutstanding)}</Text>
+              <Text style={styles.statLabel}>Outstanding</Text>
+            </View>
+          </View>
+        </View>
 
-          return (
+        {/* Download PDF Button */}
+        {customersWithBalance.length > 0 && (
+          <View style={styles.pdfButtonContainer}>
             <TouchableOpacity
-              key={customer.id}
-              style={styles.customerCard}
-              activeOpacity={1}
+              style={[styles.pdfButton, isGeneratingPDF && styles.disabledButton]}
+              onPress={generatePDFReport}
+              disabled={isGeneratingPDF}
             >
-              <View style={styles.customerHeader}>
-                <View style={styles.customerMainInfo}>
-                  {customer.profilePhoto ? (
-                    <Image
-                      source={{ uri: customer.profilePhoto }}
-                      style={styles.profilePhoto}
-                    />
-                  ) : (
-                    <View style={styles.profilePhotoPlaceholder}>
-                      <User size={24} color="#6B7280" strokeWidth={2} />
-                    </View>
-                  )}
+              {isGeneratingPDF ? (
+                <>
+                  <FileText size={20} color="#fff" strokeWidth={2} />
+                  <Text style={styles.pdfButtonText}>Generating PDF...</Text>
+                </>
+              ) : (
+                <>
+                  <Download size={20} color="#fff" strokeWidth={2} />
+                  <Text style={styles.pdfButtonText}>Download PDF Report</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
-                  <View style={styles.customerInfo}>
-                    <View style={styles.nameRow}>
-                      <Text style={styles.customerName}>{customer.name}</Text>
-                    </View>
-                    <Text style={styles.customerEmail}>{customer.email}</Text>
-                    {customer.phone && (
-                      <Text style={styles.customerPhone}>📱 {customer.phone}</Text>
-                    )}
-                    <Text style={styles.customerNumber}>#{customer.customerNumber}</Text>
-                    <View style={styles.customerMeta}>
-                      <Text style={[
-                        styles.paymentType,
-                        { backgroundColor: customer.paymentType === 'monthly' ? '#DBEAFE' : '#D1FAE5' }
-                      ]}>
-                        {customer.paymentType === 'monthly' ? 'Monthly Billing' : 'Cash Only'}
-                      </Text>
-                      {customer.isFirstLogin && (
-                        <Text style={styles.firstLoginBadge}>First Login Pending</Text>
+        {/* Customer Bills */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Outstanding Balances</Text>
+
+          {filteredCustomers.length === 0 ? (
+            <View style={styles.emptyState}>
+              {searchQuery ? (
+                <>
+                  <Search size={64} color="#CBD5E1" strokeWidth={1} />
+                  <Text style={styles.emptyText}>No results found</Text>
+                  <Text style={styles.emptySubtext}>Try searching with a different term</Text>
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={64} color="#0EA5E9" strokeWidth={1} />
+                  <Text style={styles.emptyText}>All Clear!</Text>
+                  <Text style={styles.emptySubtext}>No outstanding balances for selected period</Text>
+                </>
+              )}
+            </View>
+          ) : (
+            filteredCustomers.map((customer) => {
+              const customerOrders = getCustomerOrders(customer.id);
+
+              return (
+                <View key={customer.id} style={styles.billCard}>
+                  <View style={styles.billHeader}>
+                    <View style={styles.customerInfo}>
+                      <View style={styles.customerNameRow}>
+                        <Text style={styles.customerName}>{customer.name}</Text>
+                        <View style={styles.customerNumberBadge}>
+                          <Text style={styles.customerNumberText}>#{customer.customerNumber}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.customerEmailRow}>
+                        <Mail size={14} color="#6B7280" strokeWidth={2} />
+                        <Text style={styles.customerEmail}>{customer.email}</Text>
+                      </View>
+                      {customer.phone && (
+                        <View style={styles.customerPhoneRow}>
+                          <Text style={styles.customerPhone}>📱 {customer.phone}</Text>
+                        </View>
                       )}
                     </View>
                   </View>
-                </View>
 
-                <View style={styles.customerStats}>
-                  <View style={styles.statItem}>
-                    <Receipt size={16} color="#F97316" strokeWidth={2} />
-                    <Text style={styles.statText}>{stats.totalOrders} orders</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <DollarSign size={16} color="#10B981" strokeWidth={2} />
-                    <Text style={styles.statText}>{formatCurrency(customer.totalSpent)} spent</Text>
-                  </View>
-                  {stats.pendingOrders > 0 && (
-                    <View style={styles.statItem}>
-                      <Clock size={16} color="#F59E0B" strokeWidth={2} />
-                      <Text style={styles.statText}>{stats.pendingOrders} pending</Text>
+                  <View style={styles.balanceSection}>
+                    <View style={styles.balanceRow}>
+                      <Text style={styles.balanceLabel}>Period Balance</Text>
+                      <Text style={styles.balanceAmount}>{formatCurrency(customer.periodBalance)}</Text>
                     </View>
-                  )}
-                </View>
-              </View>
-
-              {customer.monthlyBalance > 0 && (
-                <View style={styles.balanceIndicator}>
-                  <View style={styles.balanceInfo}>
-                    <Text style={styles.balanceLabel}>Outstanding Balance</Text>
-                    <Text style={styles.balanceAmount}>{formatCurrency(customer.monthlyBalance)}</Text>
+                    <View style={styles.balanceRow}>
+                      <Text style={styles.totalSpentLabel}>Total Spent</Text>
+                      <Text style={styles.totalSpentAmount}>{formatCurrency(customer.totalSpent)}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.balanceHint}>View in Monthly Bills tab</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
 
-        {actualCustomers.length === 0 && (
-          <View style={styles.emptyState}>
-            <Users size={64} color="#D1D5DB" strokeWidth={1} />
-            <Text style={styles.emptyText}>No customers registered</Text>
-            <Text style={styles.emptySubtext}>Add your first customer to get started</Text>
-          </View>
-        )}
+                  <View style={styles.orderSummary}>
+                    <View style={styles.orderSummaryHeader}>
+                      <Calendar size={16} color="#6B7280" strokeWidth={2} />
+                      <Text style={styles.orderSummaryTitle}>
+                        {customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''} in period
+                      </Text>
+                    </View>
+
+                    {customerOrders.slice(0, 3).map((order) => (
+                      <View key={order.id} style={styles.orderItem}>
+                        <Text style={styles.orderDate}>
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </Text>
+                        <Text style={styles.orderId}>#{order.id.slice(-6)}</Text>
+                        <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
+                      </View>
+                    ))}
+
+                    {customerOrders.length > 3 && (
+                      <Text style={styles.moreOrders}>
+                        + {customerOrders.length - 3} more order{customerOrders.length - 3 !== 1 ? 's' : ''}
+                      </Text>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.payButton}
+                    onPress={() => handlePayment(customer)}
+                  >
+                    <CreditCard size={20} color="#fff" strokeWidth={2} />
+                    <Text style={styles.payButtonText}>Process Payment</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          )}
+        </View>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Add Customer Modal */}
+      {/* Calendar Modal */}
       <Modal
-        visible={showAddModal}
+        visible={showCalendarModal}
         transparent
         animationType="slide"
-        onRequestClose={() => !isSubmitting && setShowAddModal(false)}
+        onRequestClose={() => setShowCalendarModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Register New User</Text>
-                <Text style={styles.modalDescription}>
-                  User will receive an OTP when they first login
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+          <View style={styles.calendarModal}>
+            <View style={styles.calendarHeader}>
+              <Text style={styles.calendarTitle}>Select Date Range</Text>
+              <TouchableOpacity onPress={() => setShowCalendarModal(false)}>
                 <X size={24} color="#6B7280" strokeWidth={2} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm}>
-              <View style={styles.photoUploadSection}>
-                <Text style={styles.photoLabel}>Profile Photo (Optional)</Text>
-                {newCustomer.profilePhoto ? (
-                  <View style={styles.photoPreviewContainer}>
-                    <Image
-                      source={{ uri: newCustomer.profilePhoto }}
-                      style={styles.photoPreview}
-                    />
-                    {isUploadingPhoto && (
-                      <View style={styles.uploadingOverlay}>
-                        <ActivityIndicator size="large" color="#fff" />
-                      </View>
-                    )}
-                    <TouchableOpacity
-                      style={styles.changePhotoButton}
-                      onPress={showPhotoOptions}
-                      disabled={isUploadingPhoto || isSubmitting}
-                    >
-                      <Upload size={14} color="#fff" strokeWidth={2} />
-                      <Text style={styles.changePhotoText}>Change</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.photoUploadButton}
-                    onPress={showPhotoOptions}
-                    disabled={isUploadingPhoto || isSubmitting}
-                  >
-                    {isUploadingPhoto ? (
-                      <ActivityIndicator color="#10B981" />
-                    ) : (
-                      <>
-                        <Camera size={24} color="#10B981" strokeWidth={2} />
-                        <Text style={styles.photoUploadText}>Add Photo</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <View style={styles.inputContainer}>
-                <User size={20} color="#6B7280" strokeWidth={2} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Full Name *"
-                  value={newCustomer.name}
-                  onChangeText={(text) => setNewCustomer(prev => ({ ...prev, name: text }))}
-                  editable={!isSubmitting}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Mail size={20} color="#6B7280" strokeWidth={2} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email Address *"
-                  value={newCustomer.email}
-                  onChangeText={(text) => setNewCustomer(prev => ({ ...prev, email: text }))}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!isSubmitting}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Phone size={20} color="#6B7280" strokeWidth={2} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Phone Number (Optional)"
-                  value={newCustomer.phone}
-                  onChangeText={(text) => setNewCustomer(prev => ({ ...prev, phone: text }))}
-                  keyboardType="phone-pad"
-                  editable={!isSubmitting}
-                />
-              </View>
-
-              <View style={styles.roleTypeContainer}>
-                <Text style={styles.roleTypeLabel}>Account Type:</Text>
-                <View style={styles.roleTypeButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleTypeButton,
-                      newCustomer.role === 'customer' && styles.selectedRoleType
-                    ]}
-                    onPress={() => setNewCustomer(prev => ({ ...prev, role: 'customer' }))}
-                    disabled={isSubmitting}
-                  >
-                    <Users size={16} color={newCustomer.role === 'customer' ? '#fff' : '#6B7280'} strokeWidth={2} />
-                    <Text style={[
-                      styles.roleTypeText,
-                      newCustomer.role === 'customer' && styles.selectedRoleTypeText
-                    ]}>
-                      Customer
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.roleTypeButton,
-                      newCustomer.role === 'receptionist' && styles.selectedRoleType
-                    ]}
-                    onPress={() => setNewCustomer(prev => ({ ...prev, role: 'receptionist' }))}
-                    disabled={isSubmitting}
-                  >
-                    <UserCog size={16} color={newCustomer.role === 'receptionist' ? '#fff' : '#6B7280'} strokeWidth={2} />
-                    <Text style={[
-                      styles.roleTypeText,
-                      newCustomer.role === 'receptionist' && styles.selectedRoleTypeText
-                    ]}>
-                      Receptionist
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {newCustomer.role === 'customer' && (
-                <View style={styles.paymentTypeContainer}>
-                  <Text style={styles.paymentTypeLabel}>Payment Type:</Text>
-                  <View style={styles.paymentTypeButtons}>
-                    <TouchableOpacity
-                      style={[
-                        styles.paymentTypeButton,
-                        newCustomer.paymentType === 'cash' && styles.selectedPaymentType
-                      ]}
-                      onPress={() => setNewCustomer(prev => ({ ...prev, paymentType: 'cash' }))}
-                      disabled={isSubmitting}
-                    >
-                      <CreditCard size={16} color={newCustomer.paymentType === 'cash' ? '#fff' : '#6B7280'} strokeWidth={2} />
-                      <Text style={[
-                        styles.paymentTypeText,
-                        newCustomer.paymentType === 'cash' && styles.selectedPaymentTypeText
-                      ]}>
-                        Cash
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.paymentTypeButton,
-                        newCustomer.paymentType === 'monthly' && styles.selectedPaymentType
-                      ]}
-                      onPress={() => setNewCustomer(prev => ({ ...prev, paymentType: 'monthly' }))}
-                      disabled={isSubmitting}
-                    >
-                      <Receipt size={16} color={newCustomer.paymentType === 'monthly' ? '#fff' : '#6B7280'} strokeWidth={2} />
-                      <Text style={[
-                        styles.paymentTypeText,
-                        newCustomer.paymentType === 'monthly' && styles.selectedPaymentTypeText
-                      ]}>
-                        Monthly
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalActions}>
+            <View style={styles.calendarMonthNav}>
               <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowAddModal(false)}
-                disabled={isSubmitting}
+                style={styles.calendarNavButton}
+                onPress={() => navigateCalendarMonth(-1)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <ChevronLeft size={20} color="#1F2937" strokeWidth={2} />
               </TouchableOpacity>
 
+              <Text style={styles.calendarMonthText}>
+                {currentCalendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </Text>
+
               <TouchableOpacity
-                style={[styles.addCustomerButton, (isSubmitting || isUploadingPhoto) && styles.disabledButton]}
-                onPress={handleAddCustomer}
-                disabled={isSubmitting || isUploadingPhoto}
+                style={styles.calendarNavButton}
+                onPress={() => navigateCalendarMonth(1)}
               >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.addCustomerButtonText}>
-                    Register {newCustomer.role === 'receptionist' ? 'Receptionist' : 'Customer'}
-                  </Text>
-                )}
+                <ChevronRight size={20} color="#1F2937" strokeWidth={2} />
               </TouchableOpacity>
             </View>
+
+            <View style={styles.calendarWeekDays}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <Text key={day} style={styles.calendarWeekDayText}>{day}</Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {renderCalendar()}
+            </View>
+
+            <View style={styles.calendarActions}>
+              {(startDate || endDate) && (
+                <TouchableOpacity
+                  style={styles.calendarClearButton}
+                  onPress={clearSelection}
+                >
+                  <Text style={styles.calendarClearText}>Clear Selection</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.calendarApplyButton}
+                onPress={() => setShowCalendarModal(false)}
+              >
+                <Text style={styles.calendarApplyText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isSelectingRange && startDate && (
+              <Text style={styles.calendarHint}>
+                Select end date (tap same date for single day)
+              </Text>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Payment Modal */}
+      <Modal
+        visible={showPaymentModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !isProcessing && setShowPaymentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Process Payment</Text>
+              <TouchableOpacity
+                onPress={() => setShowPaymentModal(false)}
+                disabled={isProcessing}
+              >
+                <X size={24} color="#6B7280" strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedCustomer && (
+              <>
+                <View style={styles.modalCustomerInfo}>
+                  <User size={20} color="#6B7280" strokeWidth={2} />
+                  <View style={styles.modalCustomerDetails}>
+                    <Text style={styles.modalCustomerName}>{selectedCustomer.name}</Text>
+                    <Text style={styles.modalCustomerEmail}>{selectedCustomer.email}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalBalanceInfo}>
+                  <Text style={styles.modalBalanceLabel}>Outstanding Balance</Text>
+                  <Text style={styles.modalBalanceAmount}>
+                    {formatCurrency((selectedCustomer as any).periodBalance)}
+                  </Text>
+                </View>
+
+
+                <View style={styles.paymentInputContainer}>
+                  <Text style={styles.inputLabel}>Payment Amount</Text>
+                  <View style={styles.inputWrapper}>
+                    <DollarSign size={20} color="#6B7280" strokeWidth={2} />
+                    <TextInput
+                      style={styles.paymentInput}
+                      placeholder="0.00"
+                      value={paymentAmount}
+                      onChangeText={setPaymentAmount}
+                      keyboardType="decimal-pad"
+                      editable={!isProcessing}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setShowPaymentModal(false)}
+                    disabled={isProcessing}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.confirmButton, isProcessing && styles.disabledButton]}
+                    onPress={processPayment}
+                    disabled={isProcessing}
+                  >
+                    <Text style={styles.confirmButtonText}>
+                      {isProcessing ? 'Processing...' : 'Confirm Payment'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -562,178 +760,294 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  headerButton: {
-    backgroundColor: '#10B981', // green
-    padding: 10,
-    borderRadius: 999,          // fully round
+  headerRight: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: 16,
+    gap: 6,
   },
-  scrollView: {
-    flex: 1,
+  headerNavButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+  },
+  headerMonthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3E2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  headerMonthText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1F2937',
   },
   scrollContent: {
-    padding: 16,
+    paddingTop: 16,
   },
-  infoSection: {
-    flexDirection: 'row',      // 👈 makes them side by side
+  searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    fontWeight:'700',
-    color: '#6B7280',
-  },
-  customerCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    marginBottom: 12,
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#0F172A',
+  },
+  searchResults: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0EA5E9',
   },
-  customerHeader: {
+  statInfo: {
+    marginLeft: 12,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  pdfButtonContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  pdfButton: {
+    backgroundColor: '#0EA5E9',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  customerMainInfo: {
-    flexDirection: 'row',
-    flex: 1,
-    gap: 12,
-  },
-  profilePhoto: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F3F4F6',
-  },
-  profilePhotoPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: '#0EA5E9',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  pdfButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+    marginLeft: 16,
+  },
+  billCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  billHeader: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   customerInfo: {
     flex: 1,
   },
-  nameRow: {
+  customerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   customerName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  customerNumberBadge: {
+    backgroundColor: '#F97316',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  customerNumberText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  customerEmailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
   customerEmail: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 2,
+  },
+  customerPhoneRow: {
+    marginTop: 4,
   },
   customerPhone: {
     fontSize: 13,
     color: '#6B7280',
-    marginBottom: 4,
   },
-  customerNumber: {
-    fontSize: 14,
-    color: '#F97316',
-    fontWeight: 'bold',
-    marginBottom: 8,
+  balanceSection: {
+    backgroundColor: '#FEF3E2',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
   },
-  customerMeta: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  paymentType: {
-    fontSize: 12,
-    color: '#1F2937',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    fontWeight: 'bold',
-  },
-  firstLoginBadge: {
-    fontSize: 12,
-    color: '#F59E0B',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    fontWeight: 'bold',
-  },
-  customerStats: {
-    gap: 6,
-    alignItems: 'flex-end',
-    fontWeight:700
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statText: {
-    fontSize: 12,
-    color: '#010101',
-  },
-  balanceIndicator: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+  balanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  balanceInfo: {
-    flex: 1,
+    marginBottom: 8,
   },
   balanceLabel: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 4,
+    fontWeight: '600',
   },
   balanceAmount: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#F97316',
   },
-  balanceHint: {
+  totalSpentLabel: {
     fontSize: 12,
-    color: '#10B981',
+    color: '#6B7280',
+  },
+  totalSpentAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  orderSummary: {
+    marginBottom: 16,
+  },
+  orderSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  orderSummaryTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  orderItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  orderDate: {
+    fontSize: 12,
+    color: '#6B7280',
+    flex: 1,
+  },
+  orderId: {
+    fontSize: 12,
+    color: '#6B7280',
+    flex: 1,
+    textAlign: 'center',
+  },
+  orderAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  moreOrders: {
+    fontSize: 12,
+    color: '#6B7280',
     fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  payButton: {
+    backgroundColor: '#0EA5E9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  payButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   emptyState: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 32,
+    borderRadius: 16,
+    marginHorizontal: 16,
+    padding: 48,
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
     marginTop: 16,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
@@ -752,186 +1066,86 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 4,
   },
-  modalDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  modalForm: {
-    maxHeight: 500,
-    marginBottom: 24,
-  },
-  photoUploadSection: {
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  photoLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-  },
-  photoUploadButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#10B981',
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  photoUploadText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#10B981',
-  },
-  photoPreviewContainer: {
-    position: 'relative',
-  },
-  photoPreview: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F3F4F6',
-    marginBottom: 8,
-  },
-  uploadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  changePhotoButton: {
+  modalCustomerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#10B981',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    gap: 12,
+    backgroundColor: '#F9FAFB',
+    padding: 16,
     borderRadius: 12,
-    gap: 4,
+    marginBottom: 16,
   },
-  changePhotoText: {
-    color: '#fff',
-    fontSize: 12,
+  modalCustomerDetails: {
+    flex: 1,
+  },
+  modalCustomerName: {
+    fontSize: 16,
     fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 2,
   },
-  inputContainer: {
+  modalCustomerEmail: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  modalBalanceInfo: {
+    backgroundColor: '#FEF3E2',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  modalBalanceLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  modalBalanceAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#F97316',
+  },
+  paymentInputContainer: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#0EA5E9',
   },
-  input: {
+  paymentInput: {
     flex: 1,
     marginLeft: 12,
-    fontSize: 16,
-    color: '#1F2937',
-  },
-  roleTypeContainer: {
-    marginBottom: 16,
-  },
-  roleTypeLabel: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 8,
-  },
-  roleTypeButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  roleTypeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    gap: 6,
-  },
-  selectedRoleType: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
-  },
-  roleTypeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#6B7280',
-  },
-  selectedRoleTypeText: {
-    color: '#fff',
-  },
-  paymentTypeContainer: {
-    marginBottom: 16,
-  },
-  paymentTypeLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  paymentTypeButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  paymentTypeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    gap: 6,
-  },
-  selectedPaymentType: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
-  },
-  paymentTypeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#6B7280',
-  },
-  selectedPaymentTypeText: {
-    color: '#fff',
   },
   modalActions: {
     flexDirection: 'row',
@@ -939,8 +1153,8 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
   },
@@ -949,19 +1163,161 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#6B7280',
   },
-  addCustomerButton: {
+  confirmButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#10B981',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0EA5E9',
     alignItems: 'center',
   },
-  addCustomerButtonText: {
+  confirmButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  calendarClearButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  calendarClearText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  calendarApplyButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#0EA5E9',
+    alignItems: 'center',
+  },
+  calendarApplyText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  calendarHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  calendarWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  calendarWeekDayText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    width: '14.28%',
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  calendarDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  calendarDayEmpty: {
+    width: '14.28%',
+    aspectRatio: 1,
+  },
+  calendarDayInRange: {
+    backgroundColor: '#FED7AA',
+  },
+  calendarDaySelected: {
+    backgroundColor: '#F97316',
+    borderRadius: 8,
+  },
+  calendarDayToday: {
+    borderWidth: 2,
+    borderColor: '#0EA5E9',
+    borderRadius: 8,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  calendarDayTextSelected: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  calendarDayTextToday: {
+    color: '#0EA5E9',
+    fontWeight: 'bold',
+  },
+  calendarModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  calendarTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  calendarMonthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  calendarNavButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  calendarMonthText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  calendarActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  headerCalendarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FEF3E2',
+    borderRadius: 8,
+  },
+  headerDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F97316',
+    maxWidth: 150,
   },
 });
