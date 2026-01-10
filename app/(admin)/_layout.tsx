@@ -1,7 +1,7 @@
 // app/(admin)/_layout.tsx - FINAL VERSION
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { ChartBar as BarChart3, ClipboardList, ChefHat } from 'lucide-react-native';
+import { ChartBar as BarChart3, ClipboardList, ChefHat, UserCog } from 'lucide-react-native';
 import { AppProvider } from '../../context/AppContext';
 import DrawerButton from '../../components/DrawerButton';
 
@@ -90,6 +90,17 @@ export default function AdminTabLayout() {
             href: null,
           }}
         />
+
+        <Tabs.Screen
+  name="hr"
+  options={{
+    title: 'HR',
+    href: null, // 🆕 Add this line to hide from bottom tabs
+    tabBarIcon: ({ size, color }) => (
+      <UserCog size={size} color={color} strokeWidth={2} />
+    ),
+  }}
+/>
       </Tabs>
     </AppProvider>
   );

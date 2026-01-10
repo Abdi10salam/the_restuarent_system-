@@ -1,26 +1,24 @@
-// app/(admin)/customers.tsx - REMOVED GENERATE BILL BUTTON
-import React, { useState } from 'react';
+// app/(admin)/customers.tsx - HEADER BUTTON VERSION
+import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator, Image } from 'react-native';
 import { Users, DollarSign, Receipt, Plus, Mail, User, CreditCard, Clock, UserCog, X, Phone, Camera, Upload, FileText } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useSignUp } from '@clerk/clerk-expo';
+import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { Customer } from '../../types';
 import { formatCurrency } from '../../utils/currency';
-import { uploadProfileImage, deleteProfileImage } from './../lib/supabase';
+import { uploadProfileImage } from './../lib/supabase';
 import { useRouter } from 'expo-router';
 
 export default function AdminCustomersScreen() {
-  const { state, dispatch, addCustomerToSupabase } = useApp();
+  const navigation = useNavigation();
+  const { state, addCustomerToSupabase } = useApp();
   const { customers, orders } = state;
-  const { signUp } = useSignUp();
   const router = useRouter();
 
-  // 🆕 Filter to show only customers (not staff)
   const actualCustomers = customers.filter(c => c.role === 'customer');
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showStaffOrders, setShowStaffOrders] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
@@ -32,7 +30,29 @@ export default function AdminCustomersScreen() {
     paymentType: 'monthly' as 'cash' | 'monthly'
   });
 
-  // Request permissions
+  // Set header right button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <View style={styles.infoSection}>
+          <Text style={styles.sectionSubtitle}>
+            {actualCustomers.length} customers registered
+          </Text>
+        </View>
+      ),
+
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setShowAddModal(true)}
+        >
+          <Plus size={24} color="#FFFFFF" strokeWidth={2} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, actualCustomers.length]);
+
+
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -42,7 +62,6 @@ export default function AdminCustomersScreen() {
     return true;
   };
 
-  // Pick image from gallery
   const pickProfilePhoto = async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
@@ -57,10 +76,9 @@ export default function AdminCustomersScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const localUri = result.assets[0].uri;
-        
         setNewCustomer(prev => ({ ...prev, profilePhoto: localUri }));
         setIsUploadingPhoto(true);
-        
+
         const imageUrl = await uploadProfileImage(localUri, newCustomer.email || 'user');
 
         if (imageUrl) {
@@ -70,7 +88,7 @@ export default function AdminCustomersScreen() {
           setNewCustomer(prev => ({ ...prev, profilePhoto: '' }));
           Alert.alert('Error', 'Failed to upload photo. Please try again.');
         }
-        
+
         setIsUploadingPhoto(false);
       }
     } catch (error) {
@@ -80,7 +98,6 @@ export default function AdminCustomersScreen() {
     }
   };
 
-  // Take photo with camera
   const takeProfilePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -97,10 +114,9 @@ export default function AdminCustomersScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const localUri = result.assets[0].uri;
-        
         setNewCustomer(prev => ({ ...prev, profilePhoto: localUri }));
         setIsUploadingPhoto(true);
-        
+
         const imageUrl = await uploadProfileImage(localUri, newCustomer.email || 'user');
 
         if (imageUrl) {
@@ -110,7 +126,7 @@ export default function AdminCustomersScreen() {
           setNewCustomer(prev => ({ ...prev, profilePhoto: '' }));
           Alert.alert('Error', 'Failed to upload photo. Please try again.');
         }
-        
+
         setIsUploadingPhoto(false);
       }
     } catch (error) {
@@ -120,7 +136,6 @@ export default function AdminCustomersScreen() {
     }
   };
 
-  // Show photo options
   const showPhotoOptions = () => {
     Alert.alert(
       'Profile Photo',
@@ -175,13 +190,13 @@ export default function AdminCustomersScreen() {
 
       const customerNumber = await addCustomerToSupabase(customer, 'admin@test.com');
 
-      setNewCustomer({ 
-        name: '', 
-        email: '', 
-        phone: '', 
+      setNewCustomer({
+        name: '',
+        email: '',
+        phone: '',
         profilePhoto: '',
-        role: 'customer', 
-        paymentType: 'monthly' 
+        role: 'customer',
+        paymentType: 'monthly'
       });
       setShowAddModal(false);
 
@@ -198,9 +213,7 @@ export default function AdminCustomersScreen() {
     }
   };
 
-  // 🆕 Generate Monthly Report
   const handleGenerateReport = async () => {
-    // Check if there are customers with outstanding balances
     const customersWithBalance = actualCustomers.filter(
       customer => customer.paymentType === 'monthly' && customer.monthlyBalance > 0
     );
@@ -237,59 +250,20 @@ export default function AdminCustomersScreen() {
     };
   };
 
-  const getStaffStats = (staffId: string) => {
-    const staffOrders = orders.filter(order => order.placedBy === staffId);
-    return {
-      totalOrders: staffOrders.length,
-      pendingOrders: staffOrders.filter(o => o.status === 'pending').length,
-      walkInOrders: staffOrders.filter(o => o.isWalkIn).length,
-      customerOrders: staffOrders.filter(o => !o.isWalkIn).length,
-      approvedOrders: staffOrders.filter(o => o.status === 'approved').length,
-      revenue: staffOrders
-        .filter(o => o.status === 'approved')
-        .reduce((sum, o) => sum + o.totalAmount, 0),
-      orders: staffOrders.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
-    };
-  };
-
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>User Management</Text>
-          <Text style={styles.subtitle}>
-            {actualCustomers.length} customers
-          </Text>
-        </View>
-        <View style={styles.headerActions}>
-          {/* 🆕 Generate Report Button */}
-          <TouchableOpacity
-            style={styles.generateButton}
-            onPress={handleGenerateReport}
-          >
-            <FileText size={18} color="#fff" strokeWidth={2} />
-            <Text style={styles.generateButtonText}>Generate</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowAddModal(true)}
-          >
-            <Plus size={20} color="#fff" strokeWidth={2} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* Removed old header - now using navigation header */}
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+
+
         {actualCustomers.map((customer) => {
           const stats = getCustomerStats(customer.id);
-          
+
           return (
             <TouchableOpacity
               key={customer.id}
@@ -299,8 +273,8 @@ export default function AdminCustomersScreen() {
               <View style={styles.customerHeader}>
                 <View style={styles.customerMainInfo}>
                   {customer.profilePhoto ? (
-                    <Image 
-                      source={{ uri: customer.profilePhoto }} 
+                    <Image
+                      source={{ uri: customer.profilePhoto }}
                       style={styles.profilePhoto}
                     />
                   ) : (
@@ -308,7 +282,7 @@ export default function AdminCustomersScreen() {
                       <User size={24} color="#6B7280" strokeWidth={2} />
                     </View>
                   )}
-                  
+
                   <View style={styles.customerInfo}>
                     <View style={styles.nameRow}>
                       <Text style={styles.customerName}>{customer.name}</Text>
@@ -331,7 +305,7 @@ export default function AdminCustomersScreen() {
                     </View>
                   </View>
                 </View>
-                
+
                 <View style={styles.customerStats}>
                   <View style={styles.statItem}>
                     <Receipt size={16} color="#F97316" strokeWidth={2} />
@@ -350,7 +324,6 @@ export default function AdminCustomersScreen() {
                 </View>
               </View>
 
-              {/* Balance indicator */}
               {customer.monthlyBalance > 0 && (
                 <View style={styles.balanceIndicator}>
                   <View style={styles.balanceInfo}>
@@ -375,7 +348,7 @@ export default function AdminCustomersScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Register User Modal - Keep existing code */}
+      {/* Add Customer Modal */}
       <Modal
         visible={showAddModal}
         transparent
@@ -397,13 +370,12 @@ export default function AdminCustomersScreen() {
             </View>
 
             <ScrollView style={styles.modalForm}>
-              {/* Profile Photo Upload */}
               <View style={styles.photoUploadSection}>
                 <Text style={styles.photoLabel}>Profile Photo (Optional)</Text>
                 {newCustomer.profilePhoto ? (
                   <View style={styles.photoPreviewContainer}>
-                    <Image 
-                      source={{ uri: newCustomer.profilePhoto }} 
+                    <Image
+                      source={{ uri: newCustomer.profilePhoto }}
                       style={styles.photoPreview}
                     />
                     {isUploadingPhoto && (
@@ -581,8 +553,6 @@ export default function AdminCustomersScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Staff Orders Modal - Keep existing if needed */}
     </View>
   );
 }
@@ -592,68 +562,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerButton: {
+    backgroundColor: '#10B981', // green
+    padding: 10,
+    borderRadius: 999,          // fully round
     alignItems: 'center',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  // 🆕 Header actions with generate button
-  headerActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  generateButton: {
-    backgroundColor: '#F97316',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  generateButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  addButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 24,
-    width: 48,
-    height: 48,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 16,
+    padding: 16,
+  },
+  infoSection: {
+    flexDirection: 'row',      // 👈 makes them side by side
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight:'700',
+    color: '#6B7280',
   },
   customerCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    marginHorizontal: 16,
     marginBottom: 12,
     padding: 20,
     shadowColor: '#000',
@@ -703,20 +643,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
-  receptionistBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  receptionistBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
   customerEmail: {
     fontSize: 14,
     color: '#6B7280',
@@ -758,6 +684,7 @@ const styles = StyleSheet.create({
   customerStats: {
     gap: 6,
     alignItems: 'flex-end',
+    fontWeight:700
   },
   statItem: {
     flexDirection: 'row',
@@ -766,9 +693,8 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#010101',
   },
-  // 🆕 Balance indicator (instead of button)
   balanceIndicator: {
     marginTop: 16,
     paddingTop: 16,
@@ -799,7 +725,6 @@ const styles = StyleSheet.create({
   emptyState: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    marginHorizontal: 16,
     padding: 32,
     alignItems: 'center',
   },

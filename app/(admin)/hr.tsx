@@ -1,18 +1,19 @@
-// app/(admin)/hr.tsx - HR MANAGEMENT SCREEN
-import React, { useState } from 'react';
+// app/(admin)/hr.tsx - HEADER BUTTON VERSION
+import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator, Image } from 'react-native';
-import { UserCog, DollarSign, Receipt, Plus, Mail, User, X, Phone, Camera, Upload, Clock, Briefcase } from 'lucide-react-native';
+import { UserCog, DollarSign, Receipt, Plus, Mail, User, X, Phone, Camera, Upload, Briefcase } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { Customer } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { uploadProfileImage } from './../lib/supabase';
 
 export default function HRManagementScreen() {
+  const navigation = useNavigation();
   const { state, addCustomerToSupabase } = useApp();
   const { customers, orders } = state;
 
-  // 🆕 Filter to show only staff/receptionists
   const staffMembers = customers.filter(c => c.role === 'receptionist');
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -26,7 +27,20 @@ export default function HRManagementScreen() {
     profilePhoto: '',
   });
 
-  // Request permissions
+  // Set header right button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setShowAddModal(true)}
+        >
+          <Plus size={24} color="#ffff" strokeWidth={2} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -36,7 +50,6 @@ export default function HRManagementScreen() {
     return true;
   };
 
-  // Pick image from gallery
   const pickProfilePhoto = async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
@@ -51,10 +64,10 @@ export default function HRManagementScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const localUri = result.assets[0].uri;
-        
+
         setNewStaff(prev => ({ ...prev, profilePhoto: localUri }));
         setIsUploadingPhoto(true);
-        
+
         const imageUrl = await uploadProfileImage(localUri, newStaff.email || 'staff');
 
         if (imageUrl) {
@@ -64,7 +77,7 @@ export default function HRManagementScreen() {
           setNewStaff(prev => ({ ...prev, profilePhoto: '' }));
           Alert.alert('Error', 'Failed to upload photo.');
         }
-        
+
         setIsUploadingPhoto(false);
       }
     } catch (error) {
@@ -74,7 +87,6 @@ export default function HRManagementScreen() {
     }
   };
 
-  // Take photo with camera
   const takeProfilePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -91,10 +103,10 @@ export default function HRManagementScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const localUri = result.assets[0].uri;
-        
+
         setNewStaff(prev => ({ ...prev, profilePhoto: localUri }));
         setIsUploadingPhoto(true);
-        
+
         const imageUrl = await uploadProfileImage(localUri, newStaff.email || 'staff');
 
         if (imageUrl) {
@@ -104,7 +116,7 @@ export default function HRManagementScreen() {
           setNewStaff(prev => ({ ...prev, profilePhoto: '' }));
           Alert.alert('Error', 'Failed to upload photo.');
         }
-        
+
         setIsUploadingPhoto(false);
       }
     } catch (error) {
@@ -114,7 +126,6 @@ export default function HRManagementScreen() {
     }
   };
 
-  // Show photo options
   const showPhotoOptions = () => {
     Alert.alert(
       'Profile Photo',
@@ -158,9 +169,9 @@ export default function HRManagementScreen() {
         email: newStaff.email,
         phone: newStaff.phone || undefined,
         profilePhoto: newStaff.profilePhoto || undefined,
-        customerNumber: 0, // Staff don't need customer numbers (will be hidden in UI)
+        customerNumber: 0,
         role: 'receptionist',
-        paymentType: 'cash', // Default, not used for staff
+        paymentType: 'cash',
         monthlyBalance: 0,
         totalSpent: 0,
         isFirstLogin: true,
@@ -169,10 +180,10 @@ export default function HRManagementScreen() {
 
       await addCustomerToSupabase(staff, 'admin@test.com');
 
-      setNewStaff({ 
-        name: '', 
-        email: '', 
-        phone: '', 
+      setNewStaff({
+        name: '',
+        email: '',
+        phone: '',
         profilePhoto: '',
       });
       setShowAddModal(false);
@@ -201,7 +212,7 @@ export default function HRManagementScreen() {
       revenue: staffOrders
         .filter(o => o.status === 'approved')
         .reduce((sum, o) => sum + o.totalAmount, 0),
-      orders: staffOrders.sort((a, b) => 
+      orders: staffOrders.sort((a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       ),
     };
@@ -209,29 +220,23 @@ export default function HRManagementScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>HR Management</Text>
-          <Text style={styles.subtitle}>
-            {staffMembers.length} staff member{staffMembers.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
-        >
-          <Plus size={20} color="#fff" strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
+      {/* Removed old header - now using navigation header */}
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        <View style={styles.infoSection}>
+          <Text style={styles.sectionTitle}>HR Management</Text>
+          <Text style={styles.sectionSubtitle}>
+            {staffMembers.length} staff member{staffMembers.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+
         {staffMembers.map((staff) => {
           const stats = getStaffStats(staff.id);
-          
+
           return (
             <TouchableOpacity
               key={staff.id}
@@ -242,8 +247,8 @@ export default function HRManagementScreen() {
               <View style={styles.staffHeader}>
                 <View style={styles.staffMainInfo}>
                   {staff.profilePhoto ? (
-                    <Image 
-                      source={{ uri: staff.profilePhoto }} 
+                    <Image
+                      source={{ uri: staff.profilePhoto }}
                       style={styles.profilePhoto}
                     />
                   ) : (
@@ -251,7 +256,7 @@ export default function HRManagementScreen() {
                       <UserCog size={28} color="#10B981" strokeWidth={2} />
                     </View>
                   )}
-                  
+
                   <View style={styles.staffInfo}>
                     <View style={styles.nameRow}>
                       <Text style={styles.staffName}>{staff.name}</Text>
@@ -269,7 +274,7 @@ export default function HRManagementScreen() {
                     )}
                   </View>
                 </View>
-                
+
                 <View style={styles.staffStats}>
                   <View style={styles.statItem}>
                     <Receipt size={16} color="#10B981" strokeWidth={2} />
@@ -333,13 +338,12 @@ export default function HRManagementScreen() {
             </View>
 
             <ScrollView style={styles.modalForm}>
-              {/* Profile Photo Upload */}
               <View style={styles.photoUploadSection}>
                 <Text style={styles.photoLabel}>Profile Photo (Optional)</Text>
                 {newStaff.profilePhoto ? (
                   <View style={styles.photoPreviewContainer}>
-                    <Image 
-                      source={{ uri: newStaff.profilePhoto }} 
+                    <Image
+                      source={{ uri: newStaff.profilePhoto }}
                       style={styles.photoPreview}
                     />
                     {isUploadingPhoto && (
@@ -435,8 +439,6 @@ export default function HRManagementScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Staff Details Modal - Can be expanded later */}
     </View>
   );
 }
@@ -446,44 +448,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerButton: {
+    backgroundColor: '#10B981', // green
+    padding: 10,
+    borderRadius: 999,          // fully round
     alignItems: 'center',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  addButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 24,
-    width: 48,
-    height: 48,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 16,
+    padding: 16,
+  },
+  infoSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
   },
   staffCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    marginHorizontal: 16,
     marginBottom: 12,
     padding: 20,
     shadowColor: '#000',
@@ -607,7 +600,6 @@ const styles = StyleSheet.create({
   emptyState: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    marginHorizontal: 16,
     padding: 48,
     alignItems: 'center',
   },
