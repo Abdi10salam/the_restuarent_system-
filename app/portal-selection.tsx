@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ChefHat, Shield, Users, UserCog } from 'lucide-react-native';
 
@@ -11,7 +11,7 @@ export default function PortalSelectionScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <View style={styles.header}>
         <ChefHat size={48} color="#F97316" strokeWidth={2} />
         <Text style={styles.title}>Restaurant Portal</Text>
@@ -71,7 +71,7 @@ export default function PortalSelectionScreen() {
           Admin: admin@test.com | admin
         </Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
