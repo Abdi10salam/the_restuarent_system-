@@ -11,7 +11,7 @@ export default function PortalSelectionScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <ChefHat size={48} color="#F97316" strokeWidth={2} />
         <Text style={styles.title}>Restaurant Portal</Text>
