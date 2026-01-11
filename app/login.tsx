@@ -290,7 +290,7 @@ export default function LoginScreen() {
   };
 
   return (
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView style={{ flex: 1 }}>
           <View style={styles.container}>
@@ -387,28 +387,10 @@ export default function LoginScreen() {
                   <Text style={styles.loginButtonText}>Sign In</Text>
                 )}
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.demoButton}
-                onPress={fillDemoCredentials}
-                disabled={isLoading}
-              >
-                <Text style={[styles.demoButtonText, { color: portalColor }]}>
-                  Use Demo Credentials
-                </Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Demo Credentials:
-              </Text>
-              <Text style={styles.credentialsText}>
-                {isCustomer
-                  ? 'Email: customer@test.com | Password: password'
-                  : 'Email: admin@test.com | Password: admin'
-                }
-              </Text>
+
             </View>
           </View>
         </ScrollView>
