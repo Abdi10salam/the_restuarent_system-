@@ -10,9 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
-  ScrollView
+  TouchableWithoutFeedback, Keyboard, ScrollView
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ChefHat, Mail, Lock, ArrowLeft } from 'lucide-react-native';
@@ -100,7 +98,6 @@ export default function LoginScreen() {
           setIsLoading(false);
           return;
         }
-
         // First time login - send OTP
         if (existingCustomer.is_first_login || !existingCustomer.clerk_user_id) {
           console.log('First time user - starting OTP flow');
