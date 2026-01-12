@@ -1,3 +1,4 @@
+// app/login.tsx - UPDATED WITH FORGOT PASSWORD LINK
 import React, { useState } from 'react';
 import {
   View,
@@ -72,7 +73,6 @@ export default function LoginScreen() {
 
     setIsLoading(true);
 
-    // 🔥 Clear any existing Clerk session
     try {
       await clerkSignOut();
       console.log('Cleared existing session');
@@ -80,7 +80,6 @@ export default function LoginScreen() {
       console.log('No session to clear');
     }
 
-    // Small delay to ensure session is cleared
     await new Promise(resolve => setTimeout(resolve, 300));
 
     try {
@@ -102,7 +101,7 @@ export default function LoginScreen() {
         // First time login - send OTP
         if (existingCustomer.is_first_login || !existingCustomer.clerk_user_id) {
           console.log('First time user - starting OTP flow');
-          
+
           try {
             const newSignUp = await signUp?.create({
               emailAddress: email,
@@ -110,8 +109,8 @@ export default function LoginScreen() {
 
             console.log('Clerk signup created');
 
-            await signUp?.prepareEmailAddressVerification({ 
-              strategy: 'email_code' 
+            await signUp?.prepareEmailAddressVerification({
+              strategy: 'email_code'
             });
 
             console.log('OTP sent');
@@ -121,17 +120,17 @@ export default function LoginScreen() {
 
           } catch (signUpError: any) {
             console.error('Signup error:', signUpError);
-            
+
             const errorCode = signUpError.errors?.[0]?.code;
             const errorMessage = signUpError.errors?.[0]?.message || '';
 
             if (errorCode === 'form_identifier_exists' || errorMessage.includes('already exists')) {
               console.log('User exists, trying to resend OTP');
-              
+
               try {
                 if (signUp && signUp.emailAddress === email) {
-                  await signUp.prepareEmailAddressVerification({ 
-                    strategy: 'email_code' 
+                  await signUp.prepareEmailAddressVerification({
+                    strategy: 'email_code'
                   });
                   setIsLoading(false);
                   router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
@@ -140,18 +139,18 @@ export default function LoginScreen() {
               } catch (resendError) {
                 console.error('Resend failed:', resendError);
               }
-              
+
               Alert.alert(
                 'Account Exists',
                 'This account may already be verified. Try entering your password to login.',
                 [{ text: 'OK', onPress: () => {
-                  setIsFirstLogin(false);
-                  setIsLoading(false);
-                }}]
+                    setIsFirstLogin(false);
+                    setIsLoading(false);
+                  }}]
               );
               return;
             }
-            
+
             Alert.alert('Error', 'Unable to send verification code. Please try again.');
             setIsLoading(false);
             return;
@@ -166,81 +165,74 @@ export default function LoginScreen() {
         }
 
         // Sign in with password
-        // 🔥 REPLACE THIS SECTION IN login.tsx (around line 145-185)
-// This is the "returning user" section after password verification
+        try {
+          const signInAttempt = await signIn?.create({
+            identifier: email,
+          });
 
-try {
-  const signInAttempt = await signIn?.create({
-    identifier: email,
-  });
+          if (signInAttempt?.status === 'needs_first_factor') {
+            const result = await signIn?.attemptFirstFactor({
+              strategy: 'password',
+              password: password,
+            });
 
-  if (signInAttempt?.status === 'needs_first_factor') {
-    const result = await signIn?.attemptFirstFactor({
-      strategy: 'password',
-      password: password,
-    });
+            if (result?.status === 'complete') {
+              await setActive?.({ session: result.createdSessionId });
 
-    if (result?.status === 'complete') {
-      await setActive?.({ session: result.createdSessionId });
+              const customer = {
+                id: existingCustomer.id,
+                name: existingCustomer.name,
+                email: existingCustomer.email,
+                customerNumber: existingCustomer.customer_number,
+                role: existingCustomer.role || 'customer',
+                paymentType: existingCustomer.payment_type,
+                monthlyBalance: parseFloat(existingCustomer.monthly_balance) || 0,
+                totalSpent: parseFloat(existingCustomer.total_spent) || 0,
+                isFirstLogin: false,
+                registeredAt: existingCustomer.registered_at,
+              };
 
-      // 🆕 FIX: Create customer object WITH role and customerNumber
-      const customer = {
-        id: existingCustomer.id,
-        name: existingCustomer.name,
-        email: existingCustomer.email,
-        customerNumber: existingCustomer.customer_number,      // 🆕 ADDED
-        role: existingCustomer.role || 'customer',             // 🆕 ADDED
-        paymentType: existingCustomer.payment_type,
-        monthlyBalance: parseFloat(existingCustomer.monthly_balance) || 0,
-        totalSpent: parseFloat(existingCustomer.total_spent) || 0,
-        isFirstLogin: false,
-        registeredAt: existingCustomer.registered_at,
-      };
+              let userType: 'customer' | 'receptionist' | 'admin' = 'customer';
+              if (customer.role === 'receptionist') {
+                userType = 'receptionist';
+              } else if (customer.role === 'admin') {
+                userType = 'admin';
+              }
 
-      // 🆕 FIX: Determine userType based on role from database
-      let userType: 'customer' | 'receptionist' | 'admin' = 'customer';
-      if (customer.role === 'receptionist') {
-        userType = 'receptionist';
-      } else if (customer.role === 'admin') {
-        userType = 'admin';
-      }
+              console.log('🔍 Login Debug:');
+              console.log('- User role from DB:', customer.role);
+              console.log('- Determined userType:', userType);
 
-      console.log('🔍 Login Debug:');
-      console.log('- User role from DB:', customer.role);
-      console.log('- Determined userType:', userType);
+              authDispatch({
+                type: 'LOGIN',
+                userType: userType,
+                user: customer
+              });
 
-      // 🆕 FIX: Dispatch with correct userType
-      authDispatch({
-        type: 'LOGIN',
-        userType: userType,  // 🆕 CHANGED from hardcoded 'customer'
-        user: customer
-      });
+              if (userType === 'receptionist') {
+                console.log('✅ Routing receptionist to dashboard');
+                router.replace('/(tabs)/reception-dashboard');
+              } else if (userType === 'admin') {
+                router.replace('/(admin)');
+              } else {
+                router.replace('/(tabs)');
+              }
+            }
+          }
+        } catch (signInError: any) {
+          const errorCode = signInError.errors?.[0]?.code;
+          const errorMessage = signInError.errors?.[0]?.message || '';
 
-      // 🆕 FIX: Route based on role
-      if (userType === 'receptionist') {
-        console.log('✅ Routing receptionist to dashboard');
-        router.replace('/(tabs)/reception-dashboard');
-      } else if (userType === 'admin') {
-        router.replace('/(admin)');
-      } else {
-        router.replace('/(tabs)');
-      }
-    }
-  }
-} catch (signInError: any) {
-  const errorCode = signInError.errors?.[0]?.code;
-  const errorMessage = signInError.errors?.[0]?.message || '';
-
-  if (errorCode === 'form_password_incorrect') {
-    Alert.alert('Incorrect Password', 'The password you entered is incorrect.');
-  } else if (errorCode === 'form_identifier_not_found') {
-    Alert.alert('Error', 'Account not found in Clerk. Please contact admin.');
-  } else {
-    Alert.alert('Login Failed', errorMessage || 'Unable to sign in.');
-  }
-  setIsLoading(false);
-  return;
-}
+          if (errorCode === 'form_password_incorrect') {
+            Alert.alert('Incorrect Password', 'The password you entered is incorrect.');
+          } else if (errorCode === 'form_identifier_not_found') {
+            Alert.alert('Error', 'Account not found in Clerk. Please contact admin.');
+          } else {
+            Alert.alert('Login Failed', errorMessage || 'Unable to sign in.');
+          }
+          setIsLoading(false);
+          return;
+        }
       } else {
         // Admin login
         if (!password) {
@@ -269,6 +261,21 @@ try {
     router.back();
   };
 
+  const handleForgotPassword = () => {
+    if (!email) {
+      Alert.alert('Enter Email', 'Please enter your email address first');
+      return;
+    }
+
+    if (!email.includes('@') || !email.includes('.')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
+
+    // Navigate to forgot password screen
+    router.push(`/forgot-password?email=${encodeURIComponent(email)}&portal=${portal}`);
+  };
+
   const fillDemoCredentials = () => {
     if (isCustomer) {
       setEmail('customer@test.com');
@@ -281,7 +288,7 @@ try {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <KeyboardAvoidingView style={{ flex: 1 }}  behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView style={{ flex: 1 }}>
           <View style={styles.container}>
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
@@ -353,6 +360,19 @@ try {
                 </View>
               )}
 
+              {/* Forgot Password Link */}
+              {(!isCustomer || (isCustomer && customerExists && !isFirstLogin)) && (
+                <TouchableOpacity
+                  style={styles.forgotPasswordButton}
+                  onPress={handleForgotPassword}
+                  disabled={isLoading}
+                >
+                  <Text style={[styles.forgotPasswordText, { color: portalColor }]}>
+                    Forgot Password?
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 style={[styles.loginButton, { backgroundColor: portalColor }, isLoading && styles.disabledButton]}
                 onPress={handleLogin}
@@ -364,32 +384,13 @@ try {
                   <Text style={styles.loginButtonText}>Sign In</Text>
                 )}
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.demoButton}
-                onPress={fillDemoCredentials}
-                disabled={isLoading}
-              >
-                <Text style={[styles.demoButtonText, { color: portalColor }]}>
-                  Use Demo Credentials
-                </Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Demo Credentials:
-              </Text>
-              <Text style={styles.credentialsText}>
-                {isCustomer
-                  ? 'Email: customer@test.com | Password: password'
-                  : 'Email: admin@test.com | Password: admin'
-                }
-              </Text>
+
             </View>
           </View>
         </ScrollView>
-
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
   );
@@ -467,6 +468,15 @@ const styles = StyleSheet.create({
   },
   successText: {
     color: '#10B981',
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginTop: -12,
+    marginBottom: -8,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   loginButton: {
     borderRadius: 12,

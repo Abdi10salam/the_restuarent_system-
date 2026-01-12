@@ -179,7 +179,7 @@ export default function AdminCustomersScreen() {
         email: newCustomer.email,
         phone: newCustomer.phone || undefined,
         profilePhoto: newCustomer.profilePhoto || undefined,
-        customerNumber: 0,
+        //customerNumber: 0,
         role: newCustomer.role,
         paymentType: newCustomer.paymentType,
         monthlyBalance: 0,
