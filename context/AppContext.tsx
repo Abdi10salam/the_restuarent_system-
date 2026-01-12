@@ -305,7 +305,9 @@ const fetchCustomersFromSupabase = async () => {
 
 const addCustomerToSupabase = async (customer: Customer, adminEmail: string) => {
   try {
-    const customerNumber = await generateCustomerNumber();
+    const customerNumber = customer.role === 'customer' 
+  ? await generateCustomerNumber() 
+  : 0;
 
     const { data, error } = await supabase
       .from('customers')
