@@ -1,4 +1,4 @@
-// app/(admin)/_layout.tsx - FINAL VERSION
+// app/(admin)/_layout.tsx 
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { ChartBar as BarChart3, ClipboardList, ChefHat, UserCog } from 'lucide-react-native';

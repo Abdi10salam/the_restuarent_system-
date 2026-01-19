@@ -1,4 +1,4 @@
-// app/login.tsx - UPDATED WITH FORGOT PASSWORD LINK
+// app/login.tsx 
 import React, { useState } from 'react';
 import {
   View,
@@ -62,203 +62,200 @@ export default function LoginScreen() {
     }
   };
 
-  const handleLogin = async () => {
-    if (!email) {
-      Alert.alert('Error', 'Please enter your email address');
+ // Replace the handleLogin function in login.tsx with this:
+
+const handleLogin = async () => {
+  if (!email) {
+    Alert.alert('Error', 'Please enter your email address');
+    return;
+  }
+
+  if (!email.includes('@') || !email.includes('.')) {
+    Alert.alert('Error', 'Please enter a valid email address');
+    return;
+  }
+
+  setIsLoading(true);
+
+  // Clear any existing Clerk session
+  try {
+    await clerkSignOut();
+    console.log('Cleared existing session');
+  } catch (clearError) {
+    console.log('No session to clear');
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 300));
+
+  try {
+    // ========================================
+    // STEP 1: Check if user exists in database
+    // ========================================
+    console.log('🔍 Checking user in database...');
+    const { data: existingUser, error: dbError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (dbError || !existingUser) {
+      Alert.alert(
+        'Account Not Found',
+        "This account doesn't exist. Contact your admin to register."
+      );
+      setIsLoading(false);
       return;
     }
 
-    if (!email.includes('@') || !email.includes('.')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
+    console.log('✅ User found:', existingUser.name);
+    console.log('👤 User role:', existingUser.role);
 
-    setIsLoading(true);
+    const userRole = existingUser.role || 'customer';
 
-    try {
-      await clerkSignOut();
-      console.log('Cleared existing session');
-    } catch (clearError) {
-      console.log('No session to clear');
-    }
+    // ========================================
+    // STEP 2: First-time login → Send OTP
+    // ========================================
+    if (existingUser.is_first_login || !existingUser.clerk_user_id) {
+      console.log('🆕 First time login - sending OTP');
 
-    await new Promise(resolve => setTimeout(resolve, 300));
+      try {
+        const newSignUp = await signUp?.create({
+          emailAddress: email,
+        });
 
-    try {
-      if (isCustomer) {
-        const { data: existingCustomer, error: dbError } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('email', email)
-          .single();
+        await signUp?.prepareEmailAddressVerification({
+          strategy: 'email_code'
+        });
 
-        if (dbError || !existingCustomer) {
-          Alert.alert(
-            'Account Not Found',
-            "This account doesn't exist. Contact your admin to register."
-          );
-          setIsLoading(false);
-          return;
-        }
+        console.log('✅ OTP sent');
+        setIsLoading(false);
+        router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
+        return;
 
-        // First time login - send OTP
-        if (existingCustomer.is_first_login || !existingCustomer.clerk_user_id) {
-          console.log('First time user - starting OTP flow');
+      } catch (signUpError: any) {
+        console.error('Signup error:', signUpError);
+        const errorCode = signUpError.errors?.[0]?.code;
 
+        // User exists in Clerk, just resend OTP
+        if (errorCode === 'form_identifier_exists') {
+          console.log('User exists in Clerk, resending OTP');
           try {
-            const newSignUp = await signUp?.create({
-              emailAddress: email,
-            });
-
-            console.log('Clerk signup created');
-
-            await signUp?.prepareEmailAddressVerification({
-              strategy: 'email_code'
-            });
-
-            console.log('OTP sent');
-            setIsLoading(false);
-            router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
-            return;
-
-          } catch (signUpError: any) {
-            console.error('Signup error:', signUpError);
-
-            const errorCode = signUpError.errors?.[0]?.code;
-            const errorMessage = signUpError.errors?.[0]?.message || '';
-
-            if (errorCode === 'form_identifier_exists' || errorMessage.includes('already exists')) {
-              console.log('User exists, trying to resend OTP');
-
-              try {
-                if (signUp && signUp.emailAddress === email) {
-                  await signUp.prepareEmailAddressVerification({
-                    strategy: 'email_code'
-                  });
-                  setIsLoading(false);
-                  router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
-                  return;
-                }
-              } catch (resendError) {
-                console.error('Resend failed:', resendError);
-              }
-
-              Alert.alert(
-                'Account Exists',
-                'This account may already be verified. Try entering your password to login.',
-                [{ text: 'OK', onPress: () => {
-                    setIsFirstLogin(false);
-                    setIsLoading(false);
-                  }}]
-              );
+            if (signUp && signUp.emailAddress === email) {
+              await signUp.prepareEmailAddressVerification({
+                strategy: 'email_code'
+              });
+              setIsLoading(false);
+              router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
               return;
             }
-
-            Alert.alert('Error', 'Unable to send verification code. Please try again.');
-            setIsLoading(false);
-            return;
+          } catch (resendError) {
+            console.error('Resend failed:', resendError);
           }
         }
 
-        // Returning user - need password
-        if (!password) {
-          Alert.alert('Password Required', 'Please enter your password to sign in.');
-          setIsLoading(false);
-          return;
-        }
+        Alert.alert('Error', 'Unable to send verification code. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+    }
 
-        // Sign in with password
-        try {
-          const signInAttempt = await signIn?.create({
-            identifier: email,
+    // ========================================
+    // STEP 3: Returning user → Need password
+    // ========================================
+    if (!password) {
+      Alert.alert('Password Required', 'Please enter your password to sign in.');
+      setIsLoading(false);
+      return;
+    }
+
+    // Sign in with password
+    console.log('🔐 Signing in with password...');
+    try {
+      const signInAttempt = await signIn?.create({
+        identifier: email,
+      });
+
+      if (signInAttempt?.status === 'needs_first_factor') {
+        const result = await signIn?.attemptFirstFactor({
+          strategy: 'password',
+          password: password,
+        });
+
+        if (result?.status === 'complete') {
+          await setActive?.({ session: result.createdSessionId });
+
+          // ========================================
+          // STEP 4: Determine user type & route
+          // ========================================
+          const customer = {
+            id: existingUser.id,
+            name: existingUser.name,
+            email: existingUser.email,
+            phone: existingUser.phone,
+            profilePhoto: existingUser.profile_photo,
+            customerNumber: existingUser.customer_number,
+            role: userRole,
+            paymentType: existingUser.payment_type,
+            monthlyBalance: parseFloat(existingUser.monthly_balance) || 0,
+            totalSpent: parseFloat(existingUser.total_spent) || 0,
+            isFirstLogin: false,
+            registeredAt: existingUser.registered_at,
+          };
+
+          let userType: 'customer' | 'receptionist' | 'admin';
+          
+          // 🆕 Support master_admin and admin roles
+          if (userRole === 'master_admin' || userRole === 'admin') {
+            userType = 'admin';
+            console.log('✅ Logging in as ADMIN');
+          } else if (userRole === 'receptionist') {
+            userType = 'receptionist';
+            console.log('✅ Logging in as RECEPTIONIST');
+          } else {
+            userType = 'customer';
+            console.log('✅ Logging in as CUSTOMER');
+          }
+
+          authDispatch({
+            type: 'LOGIN',
+            userType: userType,
+            user: customer
           });
 
-          if (signInAttempt?.status === 'needs_first_factor') {
-            const result = await signIn?.attemptFirstFactor({
-              strategy: 'password',
-              password: password,
-            });
-
-            if (result?.status === 'complete') {
-              await setActive?.({ session: result.createdSessionId });
-
-              const customer = {
-                id: existingCustomer.id,
-                name: existingCustomer.name,
-                email: existingCustomer.email,
-                customerNumber: existingCustomer.customer_number,
-                role: existingCustomer.role || 'customer',
-                paymentType: existingCustomer.payment_type,
-                monthlyBalance: parseFloat(existingCustomer.monthly_balance) || 0,
-                totalSpent: parseFloat(existingCustomer.total_spent) || 0,
-                isFirstLogin: false,
-                registeredAt: existingCustomer.registered_at,
-              };
-
-              let userType: 'customer' | 'receptionist' | 'admin' = 'customer';
-              if (customer.role === 'receptionist') {
-                userType = 'receptionist';
-              } else if (customer.role === 'admin') {
-                userType = 'admin';
-              }
-
-              console.log('🔍 Login Debug:');
-              console.log('- User role from DB:', customer.role);
-              console.log('- Determined userType:', userType);
-
-              authDispatch({
-                type: 'LOGIN',
-                userType: userType,
-                user: customer
-              });
-
-              if (userType === 'receptionist') {
-                console.log('✅ Routing receptionist to dashboard');
-                router.replace('/(tabs)/reception-dashboard');
-              } else if (userType === 'admin') {
-                router.replace('/(admin)');
-              } else {
-                router.replace('/(tabs)');
-              }
-            }
-          }
-        } catch (signInError: any) {
-          const errorCode = signInError.errors?.[0]?.code;
-          const errorMessage = signInError.errors?.[0]?.message || '';
-
-          if (errorCode === 'form_password_incorrect') {
-            Alert.alert('Incorrect Password', 'The password you entered is incorrect.');
-          } else if (errorCode === 'form_identifier_not_found') {
-            Alert.alert('Error', 'Account not found in Clerk. Please contact admin.');
+          // Route to correct dashboard
+          if (userType === 'admin') {
+            router.replace('/(admin)');
+          } else if (userType === 'receptionist') {
+            router.replace('/(tabs)/reception-dashboard');
           } else {
-            Alert.alert('Login Failed', errorMessage || 'Unable to sign in.');
+            router.replace('/(tabs)');
           }
-          setIsLoading(false);
-          return;
-        }
-      } else {
-        // Admin login
-        if (!password) {
-          Alert.alert('Error', 'Please enter your password');
-          setIsLoading(false);
-          return;
-        }
 
-        const result = await login('admin', email, password);
-
-        if (result.success) {
-          router.replace('/(admin)');
-        } else {
-          Alert.alert('Login Failed', 'Invalid email or password');
+          console.log('✅ Login successful');
         }
       }
-    } catch (error: any) {
-      console.error('Login error:', error);
-      Alert.alert('Error', 'An error occurred during login.');
-    } finally {
+    } catch (signInError: any) {
+      const errorCode = signInError.errors?.[0]?.code;
+      const errorMessage = signInError.errors?.[0]?.message || '';
+
+      if (errorCode === 'form_password_incorrect') {
+        Alert.alert('Incorrect Password', 'The password you entered is incorrect.');
+      } else if (errorCode === 'form_identifier_not_found') {
+        Alert.alert('Error', 'Account not found in authentication system. Please contact admin.');
+      } else {
+        Alert.alert('Login Failed', errorMessage || 'Unable to sign in.');
+      }
       setIsLoading(false);
+      return;
     }
-  };
+
+  } catch (error: any) {
+    console.error('Login error:', error);
+    Alert.alert('Error', 'An error occurred during login.');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleBack = () => {
     router.back();
