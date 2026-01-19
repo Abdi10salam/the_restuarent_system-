@@ -26,13 +26,14 @@ export interface Customer {
   phone?: string; // 🆕 NEW - Optional phone number
   profilePhoto?: string; // 🆕 NEW - Optional profile photo URL
   customerNumber: number;
-  role: UserRole;
+ role: 'receptionist' | 'customer' | 'admin' | 'master_admin';
   paymentType: 'cash' | 'monthly';
   monthlyBalance: number;
   totalSpent: number;
   isFirstLogin: boolean;
   password?: string;
   registeredAt: string;
+  
 }
 
 // 🆕 UPDATED: Order interface with placedBy tracking

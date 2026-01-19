@@ -10,9 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
-  ScrollView
+  TouchableWithoutFeedback, Keyboard, ScrollView
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ChefHat, Mail, Lock, ArrowLeft } from 'lucide-react-native';
@@ -126,15 +124,14 @@ const handleLogin = async () => {
         await signUp?.prepareEmailAddressVerification({
           strategy: 'email_code'
         });
-
         console.log('✅ OTP sent');
         setIsLoading(false);
         router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
         return;
-
       } catch (signUpError: any) {
         console.error('Signup error:', signUpError);
         const errorCode = signUpError.errors?.[0]?.code;
+
 
         // User exists in Clerk, just resend OTP
         if (errorCode === 'form_identifier_exists') {
