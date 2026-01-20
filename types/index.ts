@@ -8,6 +8,7 @@ export interface Dish {
   image: string;
   category: string;
   available: boolean;
+  stockQuantity?: number | null; // 🆕 NEW: null = unlimited, number = limited stock
 }
 
 export interface CartItem {

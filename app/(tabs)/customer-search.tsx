@@ -1,4 +1,4 @@
-// app/(tabs)/customer-search.tsx - FIXED VERSION
+// app/(tabs)/customer
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Search, User, Mail, CreditCard, ShoppingBag, Hash } from 'lucide-react-native';
