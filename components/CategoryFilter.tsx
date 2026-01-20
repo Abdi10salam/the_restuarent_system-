@@ -62,8 +62,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   categoryButton: {
-    borderRadius: 24,
-    overflow: 'hidden',
+   
+    
   },
   selectedGradient: {
     paddingHorizontal: 24,
@@ -72,6 +72,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+     borderRadius: 24,
     elevation: 6,
   },
   selectedText: {

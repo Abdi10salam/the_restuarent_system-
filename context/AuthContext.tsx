@@ -1,19 +1,16 @@
-// context/AuthContext.tsx - UPDATED SECTIONS
-// Add these changes to your existing AuthContext file
+// context/AuthContext.tsx - UPDATED VERSION
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
 import { useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { AuthState, Customer, UserRole } from '../types';
 
-// 🆕 UPDATED: AuthAction to support receptionist
 type AuthAction =
-  | { type: 'LOGIN'; userType: 'customer' | 'admin' | 'receptionist'; user: Customer }  // Added receptionist
+  | { type: 'LOGIN'; userType: 'customer' | 'admin' | 'receptionist'; user: Customer }
   | { type: 'LOGOUT' }
   | { type: 'SET_PASSWORD'; customerId: string; password: string }
   | { type: 'SET_PENDING_EMAIL'; email: string }
   | { type: 'CLEAR_PENDING_EMAIL' };
 
-// 🆕 UPDATED: ExtendedAuthState
 interface ExtendedAuthState extends AuthState {
   pendingEmail?: string;
 }
@@ -25,29 +22,15 @@ const initialState: ExtendedAuthState = {
   pendingEmail: undefined,
 };
 
-// Mock admin user (existing - no changes)
-const mockAdmin: Customer = {
-  id: 'admin-1',
-  name: 'Restaurant Manager',
-  email: 'admin@test.com',
-  customerNumber: 1,
-  role: 'admin',
-  paymentType: 'cash',
-  monthlyBalance: 0,
-  totalSpent: 0,
-  isFirstLogin: false,
-  password: 'admin',
-  registeredAt: '2024-01-01T00:00:00Z'
-};
+// ❌ REMOVED: Mock admin - no longer needed
 
-// 🆕 UPDATED: authReducer - Support receptionist
 function authReducer(state: ExtendedAuthState, action: AuthAction): ExtendedAuthState {
   switch (action.type) {
     case 'LOGIN':
       return {
         ...state,
         isAuthenticated: true,
-        userType: action.userType,  // Can now be 'receptionist'
+        userType: action.userType,
         currentUser: action.user,
         pendingEmail: undefined,
       };
@@ -80,7 +63,6 @@ function authReducer(state: ExtendedAuthState, action: AuthAction): ExtendedAuth
   }
 }
 
-// 🆕 UPDATED: AuthContext type
 const AuthContext = createContext<{
   state: ExtendedAuthState;
   dispatch: React.Dispatch<AuthAction>;
@@ -94,17 +76,11 @@ const AuthContext = createContext<{
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // 🆕 UPDATED: login function - Support receptionist
+  // ✅ UPDATED: No more mock admin login
   const login = async (userType: 'customer' | 'admin' | 'receptionist', email: string, password?: string) => {
-    // Admin login (existing - no changes)
-    if (userType === 'admin' && email === 'admin@test.com' && password === 'admin') {
-      dispatch({ type: 'LOGIN', userType: 'admin', user: mockAdmin });
-      return { success: true };
-    }
-
-    // 🆕 Receptionist login handled in login.tsx
-    // Customer login handled in verify-otp.tsx
-    return { success: false, error: 'Invalid credentials' };
+    // All authentication is now handled in login.tsx and verify-otp.tsx
+    // This function is kept for backward compatibility
+    return { success: false, error: 'Use login screen for authentication' };
   };
 
   const logout = () => {

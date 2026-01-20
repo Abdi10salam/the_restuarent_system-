@@ -1,12 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState ,useLayoutEffect} from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { Clock, CircleCheck as CheckCircle, Circle as XCircle, RefreshCw } from 'lucide-react-native';
+import { Clock, CircleCheck as CheckCircle, Circle as XCircle, RefreshCw, Navigation,Plus } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
+import { formatCurrency, parseCurrencyInput } from '../../utils/currency';
+import { useNavigation } from '@react-navigation/native';
+
+
 
 export default function AdminOrdersScreen() {
   const { state, updateOrderStatusInSupabase, fetchOrdersFromSupabase } = useApp();
   const { orders, isLoading } = state;
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+    const [showAddModal, setShowAddModal] = useState(false);
+  
+    const navigation = useNavigation();
+
+  useLayoutEffect(() => {
+      navigation.setOptions({
+        headerRight: () => (
+          <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={handleRefresh}
+          disabled={isLoading}
+        >
+          <RefreshCw size={20} color="#10B981" strokeWidth={2} />
+        </TouchableOpacity>
+        ),
+      });
+    }, [navigation]);
 
   const handleApproveOrder = (orderId: string) => {
     Alert.alert(
@@ -66,20 +87,14 @@ export default function AdminOrdersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={{ padding: 24 }}>
         <View>
-          <Text style={styles.title}>Order Management</Text>
-          <Text style={styles.subtitle}>
+         
+          <Text style={ {fontWeight: 'bold', }}>
             {pendingOrders.length} pending • {completedOrders.length} completed
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.refreshButton}
-          onPress={handleRefresh}
-          disabled={isLoading}
-        >
-          <RefreshCw size={20} color="#10B981" strokeWidth={2} />
-        </TouchableOpacity>
+        
       </View>
 
       {isLoading ? (
@@ -104,7 +119,7 @@ export default function AdminOrdersScreen() {
                       <Clock size={20} color="#F59E0B" strokeWidth={2} />
                       <Text style={styles.orderId}>#{order.id.slice(-6)}</Text>
                     </View>
-                    <Text style={styles.orderAmount}>${order.totalAmount.toFixed(2)}</Text>
+                    <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
                   </View>
                   
                   <Text style={styles.customerInfo}>
@@ -127,7 +142,7 @@ export default function AdminOrdersScreen() {
                   <View style={styles.items}>
                     {order.items.map((item, index) => (
                       <Text key={index} style={styles.itemText}>
-                        {item.quantity}x {item.dish.name} - ${(item.dish.price * item.quantity).toFixed(2)}
+                        {item.quantity}x {item.dish.name} - ush{(formatCurrency(item.dish.price * item.quantity))}
                       </Text>
                     ))}
                   </View>
@@ -189,7 +204,7 @@ export default function AdminOrdersScreen() {
                       )}
                       <Text style={styles.orderId}>#{order.id.slice(-6)}</Text>
                     </View>
-                    <Text style={styles.orderAmount}>${order.totalAmount.toFixed(2)}</Text>
+                    <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
                   </View>
                   
                   <Text style={styles.customerInfo}>
@@ -229,6 +244,13 @@ export default function AdminOrdersScreen() {
 }
 
 const styles = StyleSheet.create({
+   headerButton: {
+    backgroundColor: '#10B981',
+    padding: 10,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',

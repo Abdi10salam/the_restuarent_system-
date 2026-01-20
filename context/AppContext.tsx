@@ -115,19 +115,42 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     
     case 'UPDATE_ORDER_STATUS': {
-      return {
-        ...state,
-        orders: state.orders.map(order =>
-          order.id === action.orderId
-            ? {
-                ...order,
-                status: action.status,
-                [action.status === 'approved' ? 'approvedAt' : 'rejectedAt']: new Date().toISOString(),
-              }
-            : order
-        ),
-      };
+    const updatedOrders = state.orders.map(order =>
+      order.id === action.orderId
+        ? {
+            ...order,
+            status: action.status,
+            [action.status === 'approved' ? 'approvedAt' : 'rejectedAt']: new Date().toISOString(),
+          }
+        : order
+    );
+
+    // 🆕 NEW: Deduct stock if order is approved
+    let updatedDishes = state.dishes;
+    if (action.status === 'approved') {
+      const order = state.orders.find(o => o.id === action.orderId);
+      if (order) {
+        updatedDishes = state.dishes.map(dish => {
+          const orderedItem = order.items.find(item => item.dish.id === dish.id);
+          if (orderedItem && dish.stockQuantity !== null && dish.stockQuantity !== undefined) {
+            const newStock = dish.stockQuantity - orderedItem.quantity;
+            return {
+              ...dish,
+              stockQuantity: Math.max(0, newStock),
+              available: newStock > 0, // Auto-disable if out of stock
+            };
+          }
+          return dish;
+        });
+      }
     }
+
+  return {
+    ...state,
+    orders: updatedOrders,
+    dishes: updatedDishes, // 🆕 NEW
+  };
+}
     
     case 'SET_CUSTOMERS':
       return { ...state, customers: action.customers };
@@ -391,88 +414,92 @@ const updateCustomerInSupabase = async (
 
   // ========== DISH FUNCTIONS ==========
   const fetchDishesFromSupabase = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('dishes')
-        .select('*')
-        .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('dishes')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      const dishes: Dish[] = (data || []).map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        description: row.description || '',
-        price: parseFloat(row.price),
-        category: row.category,
-        image: row.image || '',
-        available: row.available,
-      }));
+    const dishes: Dish[] = (data || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      price: parseFloat(row.price),
+      category: row.category,
+      image: row.image || '',
+      available: row.available,
+      stockQuantity: row.stock_quantity, // 🆕 NEW
+    }));
 
-      dispatch({ type: 'SET_DISHES', dishes });
-    } catch (error: any) {
-      console.error('Error fetching dishes:', error.message);
-    }
+    dispatch({ type: 'SET_DISHES', dishes });
+  } catch (error: any) {
+    console.error('Error fetching dishes:', error.message);
+  }
   };
 
   const addDishToSupabase = async (dish: Dish, adminEmail: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('dishes')
-        .insert({
-          name: dish.name,
-          description: dish.description,
-          price: dish.price,
-          category: dish.category,
-          image: dish.image,
-          available: dish.available,
-          created_by_admin_email: adminEmail,
-        })
-        .select()
-        .single();
+  try {
+    const { data, error } = await supabase
+      .from('dishes')
+      .insert({
+        name: dish.name,
+        description: dish.description,
+        price: dish.price,
+        category: dish.category,
+        image: dish.image,
+        available: dish.available,
+        stock_quantity: dish.stockQuantity, // 🆕 NEW
+        created_by_admin_email: adminEmail,
+      })
+      .select()
+      .single();
 
-      if (error) throw error;
+    if (error) throw error;
 
-      const newDish: Dish = {
-        id: data.id,
-        name: data.name,
-        description: data.description,
-        price: parseFloat(data.price),
-        category: data.category,
-        image: data.image,
-        available: data.available,
-      };
+    const newDish: Dish = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      price: parseFloat(data.price),
+      category: data.category,
+      image: data.image,
+      available: data.available,
+      stockQuantity: data.stock_quantity, // 🆕 NEW
+    };
 
-      dispatch({ type: 'ADD_DISH', dish: newDish });
-    } catch (error: any) {
-      console.error('Error adding dish:', error.message);
-      throw error;
-    }
+    dispatch({ type: 'ADD_DISH', dish: newDish });
+  } catch (error: any) {
+    console.error('Error adding dish:', error.message);
+    throw error;
+  }
   };
 
   const updateDishInSupabase = async (dishId: string, updates: Partial<Dish>) => {
-    try {
-      const updateData: any = {};
-      
-      if (updates.name !== undefined) updateData.name = updates.name;
-      if (updates.description !== undefined) updateData.description = updates.description;
-      if (updates.price !== undefined) updateData.price = updates.price;
-      if (updates.category !== undefined) updateData.category = updates.category;
-      if (updates.image !== undefined) updateData.image = updates.image;
-      if (updates.available !== undefined) updateData.available = updates.available;
+  try {
+    const updateData: any = {};
+    
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.price !== undefined) updateData.price = updates.price;
+    if (updates.category !== undefined) updateData.category = updates.category;
+    if (updates.image !== undefined) updateData.image = updates.image;
+    if (updates.available !== undefined) updateData.available = updates.available;
+    if (updates.stockQuantity !== undefined) updateData.stock_quantity = updates.stockQuantity; // 🆕 NEW
 
-      const { error } = await supabase
-        .from('dishes')
-        .update(updateData)
-        .eq('id', dishId);
+    const { error } = await supabase
+      .from('dishes')
+      .update(updateData)
+      .eq('id', dishId);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      dispatch({ type: 'UPDATE_DISH', dishId, updates });
-    } catch (error: any) {
-      console.error('Error updating dish:', error.message);
-      throw error;
-    }
+    dispatch({ type: 'UPDATE_DISH', dishId, updates });
+  } catch (error: any) {
+    console.error('Error updating dish:', error.message);
+    throw error;
+  }
   };
 
   const deleteDishFromSupabase = async (dishId: string) => {
@@ -568,38 +595,65 @@ const updateCustomerInSupabase = async (
   };
 
   const updateOrderStatusInSupabase = async (orderId: string, status: 'approved' | 'rejected') => {
-    try {
-      const updateData: any = {
-        status,
-        [status === 'approved' ? 'approved_at' : 'rejected_at']: new Date().toISOString(),
-      };
+  try {
+    const updateData: any = {
+      status,
+      [status === 'approved' ? 'approved_at' : 'rejected_at']: new Date().toISOString(),
+    };
 
-      const { error } = await supabase
-        .from('orders')
-        .update(updateData)
-        .eq('id', orderId);
+    const { error } = await supabase
+      .from('orders')
+      .update(updateData)
+      .eq('id', orderId);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      // Update customer balance if monthly and approved
-      if (status === 'approved') {
-        const order = state.orders.find(o => o.id === orderId);
-        if (order && order.paymentType === 'monthly') {
-          const customer = state.customers.find(c => c.id === order.customerId);
-          if (customer) {
-            await updateCustomerInSupabase(customer.id, {
-              monthlyBalance: customer.monthlyBalance + order.totalAmount,
-              totalSpent: customer.totalSpent + order.totalAmount,
-            });
+    // 🆕 NEW: Deduct stock if approved
+    if (status === 'approved') {
+      const order = state.orders.find(o => o.id === orderId);
+      if (order) {
+        for (const item of order.items) {
+          const dish = state.dishes.find(d => d.id === item.dish.id);
+          
+          // Only deduct if dish has stock tracking enabled
+          if (dish && dish.stockQuantity !== null && dish.stockQuantity !== undefined) {
+            const newStock = Math.max(0, dish.stockQuantity - item.quantity);
+            
+            await supabase
+              .from('dishes')
+              .update({
+                stock_quantity: newStock,
+                available: newStock > 0, // Auto-disable if out of stock
+              })
+              .eq('id', item.dish.id);
           }
         }
       }
-
-      dispatch({ type: 'UPDATE_ORDER_STATUS', orderId, status });
-    } catch (error: any) {
-      console.error('Error updating order status:', error.message);
-      throw error;
     }
+
+    // Update customer balance if monthly and approved
+    if (status === 'approved') {
+      const order = state.orders.find(o => o.id === orderId);
+      if (order && order.paymentType === 'monthly') {
+        const customer = state.customers.find(c => c.id === order.customerId);
+        if (customer) {
+          await updateCustomerInSupabase(customer.id, {
+            monthlyBalance: customer.monthlyBalance + order.totalAmount,
+            totalSpent: customer.totalSpent + order.totalAmount,
+          });
+        }
+      }
+    }
+
+    dispatch({ type: 'UPDATE_ORDER_STATUS', orderId, status });
+    
+    // 🆕 NEW: Refresh dishes to get updated stock
+    await fetchDishesFromSupabase();
+    
+  } catch (error: any) {
+    console.error('Error updating order status:', error.message);
+    throw error;
+  }
   };
 
   return (

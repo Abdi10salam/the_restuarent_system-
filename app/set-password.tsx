@@ -1,15 +1,16 @@
+// app/set-password.tsx - FIXED VERSION
+
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Lock, Eye, EyeOff } from 'lucide-react-native';
+import { Lock, Eye, EyeOff, Shield } from 'lucide-react-native';
 import { useSignUp, useClerk } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from "./lib/supabase";
-import { getPortalForRole } from './lib/auth-helpers';  // 🆕 NEW: Import helper
 
 export default function SetPasswordScreen() {
   const router = useRouter();
-  const { role } = useLocalSearchParams<{ role?: string }>();  // 🆕 NEW: Get role from URL
+  const { role } = useLocalSearchParams<{ role?: string }>();
   const { state, setPassword } = useAuth();
   const { signUp } = useSignUp();
   const { setActive } = useClerk();
@@ -45,20 +46,30 @@ export default function SetPasswordScreen() {
 
     try {
       console.log('========== SET PASSWORD START ==========');
+      console.log('User email:', state.currentUser.email);
       console.log('User role from URL:', role);
       console.log('User role from state:', state.currentUser.role);
       
+      // Determine actual role (prioritize URL param, then state, then default)
+      const userRole = role || state.currentUser.role || 'customer';
+      console.log('Final determined role:', userRole);
+
       // Update password in Clerk
+      console.log('1. Updating password in Clerk...');
       await signUp?.update({
         password: password,
       });
+      console.log('✅ Password updated in Clerk');
 
       // Activate Clerk session
       if (signUp?.createdSessionId) {
+        console.log('2. Activating Clerk session...');
         await setActive?.({ session: signUp.createdSessionId });
+        console.log('✅ Clerk session activated');
       }
 
-      // 🔥 UPDATE SUPABASE: Mark first login as false
+      // Update Supabase: Mark first login as false
+      console.log('3. Updating Supabase...');
       await supabase
         .from('customers')
         .update({ 
@@ -66,39 +77,53 @@ export default function SetPasswordScreen() {
           updated_at: new Date().toISOString()
         })
         .eq('email', state.currentUser.email);
+      console.log('✅ Supabase updated');
 
       // Update local state
       setPassword(state.currentUser.id, password);
 
-      // 🆕 CHANGE: Determine destination based on role
-      const userRole = state.currentUser.role || role || 'customer';
-      console.log('Final user role:', userRole);
-      
-      const destination = getPortalForRole(userRole as any) as any;
-      console.log('Routing to:', destination);
-      console.log('========== SET PASSWORD SUCCESS ==========');
+      // 🆕 FIXED: Determine correct route based on role
+      let destination: string;
+      let accountTypeName: string;
 
-      // Navigate based on role
+      if (userRole === 'master_admin' || userRole === 'admin') {
+        destination = '/(admin)';
+        accountTypeName = 'Admin';
+        console.log('✅ User is ADMIN → Routing to /(admin)');
+      } else if (userRole === 'receptionist') {
+        destination = '/(tabs)/reception-dashboard';
+        accountTypeName = 'Receptionist';
+        console.log('✅ User is RECEPTIONIST → Routing to /(tabs)/reception-dashboard');
+      } else {
+        destination = '/(tabs)';
+        accountTypeName = 'Customer';
+        console.log('✅ User is CUSTOMER → Routing to /(tabs)');
+      }
+
+      console.log('========== SET PASSWORD SUCCESS ==========');
+      console.log('Final destination:', destination);
+
       setIsLoading(false);
       
-      // 🆕 NEW: Show different success message based on role
+      // Show success message and redirect
       Alert.alert(
         'Success! 🎉',
-        userRole === 'receptionist' 
-          ? 'Your receptionist account is ready!' 
-          : 'Your account is ready!',
+        `Your ${accountTypeName.toLowerCase()} account is ready!`,
         [
           {
             text: 'Continue',
             onPress: () => {
-              router.replace(destination);
+              router.replace(destination as any);
             }
           }
         ]
       );
       
     } catch (err: any) {
-      console.error('Set password error:', err);
+      console.error('========== SET PASSWORD ERROR ==========');
+      console.error('Error:', err);
+      console.error('Error message:', err.message);
+      
       Alert.alert(
         'Error',
         err.errors?.[0]?.message || 'Failed to set password. Please try again.'
@@ -107,14 +132,28 @@ export default function SetPasswordScreen() {
     }
   };
 
-  // 🆕 NEW: Determine account type for display
-  const accountType = state.currentUser?.role === 'receptionist' ? 'Receptionist' : 'Customer';
+  // Determine account type for display
+  const userRole = role || state.currentUser?.role || 'customer';
+  let accountType = 'Customer';
+  
+  if (userRole === 'master_admin' || userRole === 'admin') {
+    accountType = 'Admin';
+  } else if (userRole === 'receptionist') {
+    accountType = 'Receptionist';
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.iconContainer}>
-          <Lock size={40} color="#F97316" strokeWidth={2} />
+        <View style={[
+          styles.iconContainer,
+          { backgroundColor: accountType === 'Admin' ? '#D1FAE5' : '#FEF3E2' }
+        ]}>
+          <Shield 
+            size={40} 
+            color={accountType === 'Admin' ? '#10B981' : '#F97316'} 
+            strokeWidth={2} 
+          />
         </View>
         <Text style={styles.title}>Set Your Password</Text>
         <Text style={styles.subtitle}>
@@ -207,7 +246,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FEF3E2',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,

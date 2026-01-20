@@ -1,7 +1,8 @@
-// app/(admin)/hr.tsx - HEADER BUTTON VERSION
+// app/(admin)/hr.tsx - WITH ADMIN CREATION
+
 import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator, Image } from 'react-native';
-import { UserCog, DollarSign, Receipt, Plus, Mail, User, X, Phone, Camera, Upload, Briefcase } from 'lucide-react-native';
+import { UserCog, DollarSign, Receipt, Plus, Mail, User, X, Phone, Camera, Upload, Briefcase, Shield } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
@@ -15,9 +16,9 @@ export default function HRManagementScreen() {
   const { customers, orders } = state;
 
   const staffMembers = customers.filter(c => c.role === 'receptionist');
+  const adminMembers = customers.filter(c => c.role === 'admin' || c.role === 'master_admin');
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showStaffDetails, setShowStaffDetails] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [newStaff, setNewStaff] = useState({
@@ -25,6 +26,7 @@ export default function HRManagementScreen() {
     email: '',
     phone: '',
     profilePhoto: '',
+    role: 'receptionist' as 'receptionist' | 'admin',
   });
 
   // Set header right button
@@ -170,7 +172,7 @@ export default function HRManagementScreen() {
         phone: newStaff.phone || undefined,
         profilePhoto: newStaff.profilePhoto || undefined,
         customerNumber: 0,
-        role: 'receptionist',
+        role: newStaff.role,
         paymentType: 'cash',
         monthlyBalance: 0,
         totalSpent: 0,
@@ -185,17 +187,19 @@ export default function HRManagementScreen() {
         email: '',
         phone: '',
         profilePhoto: '',
+        role: 'receptionist',
       });
       setShowAddModal(false);
 
+      const roleText = newStaff.role === 'admin' ? 'Admin' : 'Staff member';
       Alert.alert(
         'Success',
-        `Staff member registered!\nThey can now login with ${newStaff.email}`,
+        `${roleText} registered!\nThey can now login with ${newStaff.email}`,
         [{ text: 'OK' }]
       );
     } catch (err: any) {
       console.error('Error creating staff:', err);
-      Alert.alert('Error', err.message || 'Failed to register staff member.');
+      Alert.alert('Error', err.message || 'Failed to register. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -212,16 +216,11 @@ export default function HRManagementScreen() {
       revenue: staffOrders
         .filter(o => o.status === 'approved')
         .reduce((sum, o) => sum + o.totalAmount, 0),
-      orders: staffOrders.sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
     };
   };
 
   return (
     <View style={styles.container}>
-      {/* Removed old header - now using navigation header */}
-
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -230,93 +229,154 @@ export default function HRManagementScreen() {
         <View style={styles.infoSection}>
           <Text style={styles.sectionTitle}>HR Management</Text>
           <Text style={styles.sectionSubtitle}>
-            {staffMembers.length} staff member{staffMembers.length !== 1 ? 's' : ''}
+            {staffMembers.length} staff • {adminMembers.length} admin{adminMembers.length !== 1 ? 's' : ''}
           </Text>
         </View>
 
-        {staffMembers.map((staff) => {
-          const stats = getStaffStats(staff.id);
+        {/* ADMINS SECTION */}
+        {adminMembers.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Shield size={20} color="#10B981" strokeWidth={2} />
+              <Text style={styles.sectionHeaderText}>Administrators</Text>
+            </View>
 
-          return (
-            <TouchableOpacity
-              key={staff.id}
-              style={styles.staffCard}
-              onPress={() => setShowStaffDetails(staff.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.staffHeader}>
-                <View style={styles.staffMainInfo}>
-                  {staff.profilePhoto ? (
-                    <Image
-                      source={{ uri: staff.profilePhoto }}
-                      style={styles.profilePhoto}
-                    />
-                  ) : (
-                    <View style={styles.profilePhotoPlaceholder}>
-                      <UserCog size={28} color="#10B981" strokeWidth={2} />
+            {adminMembers.map((admin) => (
+              <TouchableOpacity
+                key={admin.id}
+                style={[styles.staffCard, styles.adminCard]}
+                activeOpacity={0.7}
+              >
+                <View style={styles.staffHeader}>
+                  <View style={styles.staffMainInfo}>
+                    {admin.profilePhoto ? (
+                      <Image
+                        source={{ uri: admin.profilePhoto }}
+                        style={styles.profilePhoto}
+                      />
+                    ) : (
+                      <View style={[styles.profilePhotoPlaceholder, styles.adminPhotoPlaceholder]}>
+                        <Shield size={28} color="#10B981" strokeWidth={2} />
+                      </View>
+                    )}
+
+                    <View style={styles.staffInfo}>
+                      <View style={styles.nameRow}>
+                        <Text style={styles.staffName}>{admin.name}</Text>
+                        <View style={[styles.staffBadge, styles.adminBadge]}>
+                          <Shield size={10} color="#fff" strokeWidth={2} />
+                          <Text style={styles.staffBadgeText}>
+                            {admin.role === 'master_admin' ? 'Master Admin' : 'Admin'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.staffEmail}>📧 {admin.email}</Text>
+                      {admin.phone && (
+                        <Text style={styles.staffPhone}>📱 {admin.phone}</Text>
+                      )}
+                      {admin.isFirstLogin && (
+                        <Text style={styles.firstLoginBadge}>First Login Pending</Text>
+                      )}
                     </View>
-                  )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
 
-                  <View style={styles.staffInfo}>
-                    <View style={styles.nameRow}>
-                      <Text style={styles.staffName}>{staff.name}</Text>
-                      <View style={styles.staffBadge}>
-                        <Briefcase size={10} color="#fff" strokeWidth={2} />
-                        <Text style={styles.staffBadgeText}>Staff</Text>
+        {/* STAFF SECTION */}
+        {staffMembers.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <UserCog size={20} color="#F97316" strokeWidth={2} />
+              <Text style={styles.sectionHeaderText}>Receptionists</Text>
+            </View>
+
+            {staffMembers.map((staff) => {
+              const stats = getStaffStats(staff.id);
+
+              return (
+                <TouchableOpacity
+                  key={staff.id}
+                  style={styles.staffCard}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.staffHeader}>
+                    <View style={styles.staffMainInfo}>
+                      {staff.profilePhoto ? (
+                        <Image
+                          source={{ uri: staff.profilePhoto }}
+                          style={styles.profilePhoto}
+                        />
+                      ) : (
+                        <View style={styles.profilePhotoPlaceholder}>
+                          <UserCog size={28} color="#F97316" strokeWidth={2} />
+                        </View>
+                      )}
+
+                      <View style={styles.staffInfo}>
+                        <View style={styles.nameRow}>
+                          <Text style={styles.staffName}>{staff.name}</Text>
+                          <View style={styles.staffBadge}>
+                            <Briefcase size={10} color="#fff" strokeWidth={2} />
+                            <Text style={styles.staffBadgeText}>Staff</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.staffEmail}>📧 {staff.email}</Text>
+                        {staff.phone && (
+                          <Text style={styles.staffPhone}>📱 {staff.phone}</Text>
+                        )}
+                        {staff.isFirstLogin && (
+                          <Text style={styles.firstLoginBadge}>First Login Pending</Text>
+                        )}
                       </View>
                     </View>
-                    <Text style={styles.staffEmail}>📧 {staff.email}</Text>
-                    {staff.phone && (
-                      <Text style={styles.staffPhone}>📱 {staff.phone}</Text>
-                    )}
-                    {staff.isFirstLogin && (
-                      <Text style={styles.firstLoginBadge}>First Login Pending</Text>
-                    )}
-                  </View>
-                </View>
 
-                <View style={styles.staffStats}>
-                  <View style={styles.statItem}>
-                    <Receipt size={16} color="#10B981" strokeWidth={2} />
-                    <Text style={styles.statText}>{stats.totalOrders}</Text>
+                    <View style={styles.staffStats}>
+                      <View style={styles.statItem}>
+                        <Receipt size={16} color="#10B981" strokeWidth={2} />
+                        <Text style={styles.statText}>{stats.totalOrders}</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <DollarSign size={16} color="#F97316" strokeWidth={2} />
+                        <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.statItem}>
-                    <DollarSign size={16} color="#F97316" strokeWidth={2} />
-                    <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
+
+                  <View style={styles.performanceSection}>
+                    <View style={styles.performanceItem}>
+                      <Text style={styles.performanceLabel}>Walk-in Orders</Text>
+                      <Text style={styles.performanceValue}>{stats.walkInOrders}</Text>
+                    </View>
+                    <View style={styles.performanceItem}>
+                      <Text style={styles.performanceLabel}>Customer Orders</Text>
+                      <Text style={styles.performanceValue}>{stats.customerOrders}</Text>
+                    </View>
+                    <View style={styles.performanceItem}>
+                      <Text style={styles.performanceLabel}>Pending</Text>
+                      <Text style={[styles.performanceValue, { color: '#F59E0B' }]}>{stats.pendingOrders}</Text>
+                    </View>
                   </View>
-                </View>
-              </View>
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
 
-              <View style={styles.performanceSection}>
-                <View style={styles.performanceItem}>
-                  <Text style={styles.performanceLabel}>Walk-in Orders</Text>
-                  <Text style={styles.performanceValue}>{stats.walkInOrders}</Text>
-                </View>
-                <View style={styles.performanceItem}>
-                  <Text style={styles.performanceLabel}>Customer Orders</Text>
-                  <Text style={styles.performanceValue}>{stats.customerOrders}</Text>
-                </View>
-                <View style={styles.performanceItem}>
-                  <Text style={styles.performanceLabel}>Pending</Text>
-                  <Text style={[styles.performanceValue, { color: '#F59E0B' }]}>{stats.pendingOrders}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-
-        {staffMembers.length === 0 && (
+        {staffMembers.length === 0 && adminMembers.length === 1 && (
           <View style={styles.emptyState}>
             <UserCog size={64} color="#D1D5DB" strokeWidth={1} />
             <Text style={styles.emptyText}>No staff members yet</Text>
-            <Text style={styles.emptySubtext}>Add your first staff member to get started</Text>
+            <Text style={styles.emptySubtext}>Add your first staff member or admin to get started</Text>
           </View>
         )}
 
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Add Staff Modal */}
+      {/* Add Staff/Admin Modal */}
       <Modal
         visible={showAddModal}
         transparent
@@ -327,9 +387,9 @@ export default function HRManagementScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Register Staff Member</Text>
+                <Text style={styles.modalTitle}>Register Team Member</Text>
                 <Text style={styles.modalDescription}>
-                  Staff will receive an OTP for first login
+                  They will receive an OTP for first login
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
@@ -338,6 +398,54 @@ export default function HRManagementScreen() {
             </View>
 
             <ScrollView style={styles.modalForm}>
+              {/* Role Selection */}
+              <View style={styles.roleSelection}>
+                <Text style={styles.roleLabel}>Account Type</Text>
+                <View style={styles.roleButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      newStaff.role === 'receptionist' && styles.roleButtonActive
+                    ]}
+                    onPress={() => setNewStaff(prev => ({ ...prev, role: 'receptionist' }))}
+                    disabled={isSubmitting}
+                  >
+                    <UserCog 
+                      size={20} 
+                      color={newStaff.role === 'receptionist' ? '#fff' : '#F97316'} 
+                      strokeWidth={2} 
+                    />
+                    <Text style={[
+                      styles.roleButtonText,
+                      newStaff.role === 'receptionist' && styles.roleButtonTextActive
+                    ]}>
+                      Receptionist
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      newStaff.role === 'admin' && styles.roleButtonActive
+                    ]}
+                    onPress={() => setNewStaff(prev => ({ ...prev, role: 'admin' }))}
+                    disabled={isSubmitting}
+                  >
+                    <Shield 
+                      size={20} 
+                      color={newStaff.role === 'admin' ? '#fff' : '#10B981'} 
+                      strokeWidth={2} 
+                    />
+                    <Text style={[
+                      styles.roleButtonText,
+                      newStaff.role === 'admin' && styles.roleButtonTextActive
+                    ]}>
+                      Administrator
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               <View style={styles.photoUploadSection}>
                 <Text style={styles.photoLabel}>Profile Photo (Optional)</Text>
                 {newStaff.profilePhoto ? (
@@ -432,7 +540,9 @@ export default function HRManagementScreen() {
                 {isSubmitting ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.addStaffButtonText}>Register Staff</Text>
+                  <Text style={styles.addStaffButtonText}>
+                    Register {newStaff.role === 'admin' ? 'Admin' : 'Staff'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -449,9 +559,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   headerButton: {
-    backgroundColor: '#10B981', // green
+    backgroundColor: '#10B981',
     padding: 10,
-    borderRadius: 999,          // fully round
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -462,7 +572,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   infoSection: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 24,
@@ -473,6 +583,18 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  sectionHeaderText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
   },
   staffCard: {
     backgroundColor: '#fff',
@@ -485,6 +607,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
     borderLeftWidth: 4,
+    borderLeftColor: '#F97316',
+  },
+  adminCard: {
     borderLeftColor: '#10B981',
   },
   staffHeader: {
@@ -508,9 +633,12 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#FEF3E2',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  adminPhotoPlaceholder: {
+    backgroundColor: '#D1FAE5',
   },
   staffInfo: {
     flex: 1,
@@ -520,6 +648,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 6,
+    flexWrap: 'wrap',
   },
   staffName: {
     fontSize: 18,
@@ -530,10 +659,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#10B981',
+    backgroundColor: '#F97316',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+  },
+  adminBadge: {
+    backgroundColor: '#10B981',
   },
   staffBadgeText: {
     fontSize: 10,
@@ -631,7 +763,7 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    maxHeight: '85%',
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -650,8 +782,46 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   modalForm: {
-    maxHeight: 400,
+    maxHeight: 450,
     marginBottom: 24,
+  },
+  roleSelection: {
+    marginBottom: 20,
+  },
+  roleLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  roleButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  roleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  roleButtonActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  roleButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  roleButtonTextActive: {
+    color: '#fff',
   },
   photoUploadSection: {
     marginBottom: 16,

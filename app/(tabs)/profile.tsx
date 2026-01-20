@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Receipt, DollarSign, Calendar, FileText, LogOut } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatCurrency, parseCurrencyInput } from '../../utils/currency';
 
 export default function ProfileScreen() {
   const { state: appState } = useApp();
@@ -83,9 +84,8 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Monthly Balance</Text>
           <View style={styles.balanceCard}>
-            <DollarSign size={24} color="#F97316" strokeWidth={2} />
             <View style={styles.balanceInfo}>
-              <Text style={styles.balanceAmount}>${user.monthlyBalance.toFixed(2)}</Text>
+              <Text style={styles.balanceAmount}>{formatCurrency(user.monthlyBalance)}</Text>
               <Text style={styles.balanceLabel}>Outstanding Balance</Text>
             </View>
           </View>
@@ -99,7 +99,7 @@ export default function ProfileScreen() {
               <View style={styles.invoiceHeader}>
                 <Calendar size={20} color="#6B7280" strokeWidth={2} />
                 <Text style={styles.invoiceMonth}>{invoice.month}</Text>
-                <Text style={styles.invoiceTotal}>${invoice.totalAmount.toFixed(2)}</Text>
+                <Text style={styles.invoiceTotal}>{formatCurrency(invoice.totalAmount)}</Text>
               </View>
               
               {invoice.orders.map((order, index) => (
@@ -108,7 +108,7 @@ export default function ProfileScreen() {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </Text>
                   <Text style={styles.invoiceOrderId}>#{order.id.slice(-6)}</Text>
-                  <Text style={styles.invoiceAmount}>${order.totalAmount.toFixed(2)}</Text>
+                  <Text style={styles.invoiceAmount}>{formatCurrency(order.totalAmount)}</Text>
                 </View>
               ))}
             </View>
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
             <View style={styles.statItem}>
               <FileText size={24} color="#10B981" strokeWidth={2} />
               <View style={styles.statInfo}>
-                <Text style={styles.statValue}>${totalSpent.toFixed(2)}</Text>
+                <Text style={styles.statValue}>{formatCurrency(totalSpent)}</Text>
                 <Text style={styles.statLabel}>Total Spent</Text>
               </View>
             </View>
@@ -151,7 +151,7 @@ export default function ProfileScreen() {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </Text>
                   <Text style={styles.recentOrderAmount}>
-                    ${order.totalAmount.toFixed(2)}
+                    {formatCurrency(order.totalAmount)}
                   </Text>
                 </View>
                 <Text style={styles.recentOrderItems}>
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: '#ff710b',
   },
   balanceLabel: {
     fontSize: 14,

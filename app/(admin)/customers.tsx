@@ -186,6 +186,7 @@ export default function AdminCustomersScreen() {
         totalSpent: 0,
         isFirstLogin: true,
         registeredAt: new Date().toISOString(),
+        customerNumber: 0
       };
 
       const customerNumber = await addCustomerToSupabase(customer, 'admin@test.com');
