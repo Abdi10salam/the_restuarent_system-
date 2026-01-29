@@ -15,8 +15,13 @@ export default function AdminDashboardScreen() {
   const pendingOrders = orders.filter(order => order.status === 'pending');
   const approvedOrders = orders.filter(order => order.status === 'approved');
   const totalRevenue = approvedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-  const monthlyBilling = customers.reduce((sum, customer) => sum + customer.monthlyBalance, 0);
-  const activeCustomers = customers.length;
+  
+  // ✅ FIX: Sum up positive balances only (customers who owe money)
+  const monthlyBilling = customers
+    .filter(customer => customer.monthlyBalance > 0)  // Only positive balances
+    .reduce((sum, customer) => sum + customer.monthlyBalance, 0);
+  
+  const activeCustomers = customers.filter(c => c.role === 'customer').length;
 
   const handleLogout = () => {
     logout();
@@ -25,9 +30,6 @@ export default function AdminDashboardScreen() {
 
   return (
     <View style={styles.container}>
-      
-      
-
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -35,7 +37,6 @@ export default function AdminDashboardScreen() {
       >
         {/* Stats Overview */}
         <View style={styles.section}>
-         
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Clock size={24} color="#F59E0B" strokeWidth={2} />

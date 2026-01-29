@@ -1,4 +1,4 @@
-// app/(tabs)/index.tsx - FIXED VERSION WITH RECEPTIONIST SUPPORT
+// app/(tabs)/index.tsx - COMPLETE VERSION WITH RECEIPT
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -10,7 +10,8 @@ import { useAuth } from "../../context/AuthContext"
 import { useRouter, useLocalSearchParams } from "expo-router"
 import { LinearGradient } from "expo-linear-gradient"
 import { formatCurrency } from "../../utils/currency"
-import { WALK_IN_CUSTOMER_ID, ensureWalkInCustomerExists } from "../lib/walkin-customer"  // 🆕 NEW
+import { WALK_IN_CUSTOMER_ID, ensureWalkInCustomerExists } from "../lib/walkin-customer"
+import { ReceiptModal } from "../../components/ReceiptModal" // 🆕 NEW
 
 export default function MenuScreen() {
   const router = useRouter()
@@ -21,12 +22,15 @@ export default function MenuScreen() {
   
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [addedDishId, setAddedDishId] = useState<string | null>(null)
-  const [receptionistCart, setReceptionistCart] = useState<any[]>([]) // 🆕 Separate cart for receptionist
+  const [receptionistCart, setReceptionistCart] = useState<any[]>([])
+  
+  // 🆕 NEW: Receipt modal states
+  const [showReceiptModal, setShowReceiptModal] = useState(false)
+  const [completedOrder, setCompletedOrder] = useState<any | null>(null)
 
   const isReceptionist = authState.currentUser?.role === 'receptionist'
   
-  // 🆕 Extract order context from params
-  const orderType = params.orderType as string // 'walk-in' or 'for-customer'
+  const orderType = params.orderType as string
   const customerId = params.customerId as string
   const customerName = params.customerName as string
   const customerEmail = params.customerEmail as string
@@ -37,7 +41,6 @@ export default function MenuScreen() {
   const isForCustomer = orderType === 'for-customer'
   const isReceptionistOrder = isReceptionist && (isWalkIn || isForCustomer)
 
-  // 🆕 Use appropriate cart
   const activeCart = isReceptionistOrder ? receptionistCart : cart
   const cartItemCount = activeCart.reduce((sum, item) => sum + item.quantity, 0)
 
@@ -51,10 +54,8 @@ export default function MenuScreen() {
     console.log('- Is For Customer:', isForCustomer);
   }, [orderType, customerId, customerName]);
 
-  // 🆕 Handle add to cart based on context
   const handleAddToCart = (dish: any) => {
     if (isReceptionistOrder) {
-      // Add to receptionist's temporary cart
       const existingItem = receptionistCart.find(item => item.dish.id === dish.id);
       if (existingItem) {
         setReceptionistCart(receptionistCart.map(item =>
@@ -66,7 +67,6 @@ export default function MenuScreen() {
         setReceptionistCart([...receptionistCart, { dish, quantity: 1 }]);
       }
     } else {
-      // Normal customer flow
       dispatch({ type: "ADD_TO_CART", dish })
     }
 
@@ -74,19 +74,16 @@ export default function MenuScreen() {
     setTimeout(() => setAddedDishId(null), 1000)
   }
 
-  // 🆕 Handle viewing cart
   const handleViewCart = () => {
     if (isReceptionistOrder) {
-      // Show receptionist checkout
       if (receptionistCart.length === 0) {
         Alert.alert('Empty Cart', 'Please add items before proceeding to checkout');
         return;
       }
       
-      // Navigate to checkout with context
       Alert.alert(
         'Confirm Order',
-        `Place order for ${isWalkIn ? 'walk-in customer' : customerName}?\n\n✅ Order will be approved immediately.`, // 🆕 CHANGED: Updated message
+        `Place order for ${isWalkIn ? 'walk-in customer' : customerName}?\n\n✅ Order will be approved immediately.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -96,12 +93,11 @@ export default function MenuScreen() {
         ]
       );
     } else {
-      // Normal customer cart
       router.push("/(tabs)/cart")
     }
   }
 
-  // 🆕 Place order as receptionist
+  // 🆕 UPDATED: Show receipt modal after order placement
   const handlePlaceReceptionistOrder = async () => {
     if (receptionistCart.length === 0) return;
 
@@ -110,7 +106,6 @@ export default function MenuScreen() {
       0
     );
 
-    // 🔥 FIX: Use special walk-in customer UUID instead of string
     const WALK_IN_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001';
 
     const order: any = {
@@ -120,10 +115,10 @@ export default function MenuScreen() {
       customerEmail: isWalkIn ? 'walk-in@restaurant.local' : customerEmail,
       items: receptionistCart,
       totalAmount,
-      status: 'approved', // 🆕 CHANGED: Auto-approve ALL receptionist orders
+      status: 'approved',
       paymentType: isWalkIn ? 'cash' : paymentType,
       createdAt: new Date().toISOString(),
-      approvedAt: new Date().toISOString(), // 🆕 NEW: Set approval timestamp
+      approvedAt: new Date().toISOString(),
       placedBy: authState.currentUser?.id,
       placedByName: authState.currentUser?.name,
       isWalkIn: isWalkIn,
@@ -132,28 +127,24 @@ export default function MenuScreen() {
     try {
       await placeOrderToSupabase(order);
       
-      Alert.alert(
-        'Success! ✅',
-        isWalkIn 
-          ? 'Walk-in order placed and approved!'
-          : `Order placed and approved for ${customerName}!`, // 🆕 CHANGED: Updated message
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setReceptionistCart([]);
-              router.push('/(tabs)/reception-dashboard');
-            }
-          }
-        ]
-      );
+      // 🆕 NEW: Show receipt modal immediately
+      setCompletedOrder(order);
+      setReceptionistCart([]);
+      setShowReceiptModal(true);
+
     } catch (error) {
       console.error('Order placement error:', error);
       Alert.alert('Error', 'Failed to place order. Please try again.');
     }
   };
 
-  // 🆕 Handle back navigation
+  // 🆕 NEW: Close receipt and return to dashboard
+  const handleCloseReceipt = () => {
+    setShowReceiptModal(false);
+    setCompletedOrder(null);
+    router.push('/(tabs)/reception-dashboard');
+  };
+
   const handleBack = () => {
     if (isReceptionistOrder) {
       if (receptionistCart.length > 0) {
@@ -194,7 +185,6 @@ export default function MenuScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Enhanced Header with Gradient */}
       <LinearGradient
         colors={isReceptionistOrder ? ["#10B981", "#059669", "#047857"] : ["#F97316", "#FB923C", "#FDBA74"]}
         start={{ x: 0, y: 0 }}
@@ -203,7 +193,6 @@ export default function MenuScreen() {
       >
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            {/* 🆕 Show back button for receptionist */}
             {isReceptionistOrder && (
               <TouchableOpacity 
                 style={styles.backButton} 
@@ -229,7 +218,6 @@ export default function MenuScreen() {
             </View>
           </View>
 
-          {/* Floating Cart Button */}
           <TouchableOpacity 
             style={[styles.cartButton, isReceptionistOrder && styles.cartButtonReceptionist]} 
             activeOpacity={0.8} 
@@ -334,6 +322,14 @@ export default function MenuScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* 🆕 NEW: Receipt Modal */}
+      <ReceiptModal
+        visible={showReceiptModal}
+        order={completedOrder}
+        servedBy={authState.currentUser?.name || 'Staff'}
+        onClose={handleCloseReceipt}
+      />
     </View>
   )
 }
