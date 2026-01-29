@@ -1,34 +1,41 @@
-import React, { useState ,useLayoutEffect} from 'react';
+// app/(admin)/orders.tsx - COMPLETE VERSION WITH RECEIPT
+
+import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { Clock, CircleCheck as CheckCircle, Circle as XCircle, RefreshCw, Navigation,Plus } from 'lucide-react-native';
+import { Clock, CircleCheck as CheckCircle, Circle as XCircle, RefreshCw } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency, parseCurrencyInput } from '../../utils/currency';
+import { useAuth } from '../../context/AuthContext'; // 🆕 NEW
+import { formatCurrency } from '../../utils/currency';
 import { useNavigation } from '@react-navigation/native';
-
-
+import { ReceiptModal } from '../../components/ReceiptModal'; // 🆕 NEW
 
 export default function AdminOrdersScreen() {
   const { state, updateOrderStatusInSupabase, fetchOrdersFromSupabase } = useApp();
+  const { state: authState } = useAuth(); // 🆕 NEW
   const { orders, isLoading } = state;
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
-    const [showAddModal, setShowAddModal] = useState(false);
   
-    const navigation = useNavigation();
+  // 🆕 NEW: Receipt modal states
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [approvedOrder, setApprovedOrder] = useState<any | null>(null);
+  
+  const navigation = useNavigation();
 
   useLayoutEffect(() => {
-      navigation.setOptions({
-        headerRight: () => (
-          <TouchableOpacity
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
           style={styles.refreshButton}
           onPress={handleRefresh}
           disabled={isLoading}
         >
           <RefreshCw size={20} color="#10B981" strokeWidth={2} />
         </TouchableOpacity>
-        ),
-      });
-    }, [navigation]);
+      ),
+    });
+  }, [navigation, isLoading]);
 
+  // 🆕 UPDATED: Show receipt modal after approval
   const handleApproveOrder = (orderId: string) => {
     Alert.alert(
       'Approve Order',
@@ -41,7 +48,15 @@ export default function AdminOrdersScreen() {
             setProcessingOrderId(orderId);
             try {
               await updateOrderStatusInSupabase(orderId, 'approved');
-              Alert.alert('Success', 'Order approved successfully!');
+              
+              // 🆕 NEW: Find the approved order and show receipt modal
+              const order = orders.find(o => o.id === orderId);
+              if (order) {
+                setApprovedOrder({ ...order, status: 'approved' });
+                setShowReceiptModal(true);
+              } else {
+                Alert.alert('Success', 'Order approved successfully!');
+              }
             } catch (error) {
               Alert.alert('Error', 'Failed to approve order. Please try again.');
             } finally {
@@ -82,6 +97,12 @@ export default function AdminOrdersScreen() {
     await fetchOrdersFromSupabase();
   };
 
+  // 🆕 NEW: Close receipt modal
+  const handleCloseReceipt = () => {
+    setShowReceiptModal(false);
+    setApprovedOrder(null);
+  };
+
   const pendingOrders = orders.filter(order => order.status === 'pending');
   const completedOrders = orders.filter(order => order.status !== 'pending');
 
@@ -89,12 +110,10 @@ export default function AdminOrdersScreen() {
     <View style={styles.container}>
       <View style={{ padding: 24 }}>
         <View>
-         
-          <Text style={ {fontWeight: 'bold', }}>
+          <Text style={{ fontWeight: 'bold' }}>
             {pendingOrders.length} pending • {completedOrders.length} completed
           </Text>
         </View>
-        
       </View>
 
       {isLoading ? (
@@ -142,7 +161,7 @@ export default function AdminOrdersScreen() {
                   <View style={styles.items}>
                     {order.items.map((item, index) => (
                       <Text key={index} style={styles.itemText}>
-                        {item.quantity}x {item.dish.name} - ush{(formatCurrency(item.dish.price * item.quantity))}
+                        {item.quantity}x {item.dish.name} - {formatCurrency(item.dish.price * item.quantity)}
                       </Text>
                     ))}
                   </View>
@@ -239,41 +258,22 @@ export default function AdminOrdersScreen() {
           <View style={styles.bottomPadding} />
         </ScrollView>
       )}
+
+      {/* 🆕 NEW: Receipt Modal */}
+      <ReceiptModal
+        visible={showReceiptModal}
+        order={approvedOrder}
+        servedBy={authState.currentUser?.name || 'Admin'}
+        onClose={handleCloseReceipt}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-   headerButton: {
-    backgroundColor: '#10B981',
-    padding: 10,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
   },
   refreshButton: {
     backgroundColor: '#D1FAE5',

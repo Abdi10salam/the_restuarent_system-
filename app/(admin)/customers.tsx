@@ -1,4 +1,4 @@
-// app/(admin)/customers.tsx - HEADER BUTTON VERSION
+// app/(admin)/customers.tsx -
 import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator, Image } from 'react-native';
 import { Users, DollarSign, Receipt, Plus, Mail, User, CreditCard, Clock, UserCog, X, Phone, Camera, Upload, FileText } from 'lucide-react-native';

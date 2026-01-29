@@ -1,4 +1,4 @@
-// app/(admin)/monthly-bills.tsx - WITH CALENDAR PICKER
+// app/(admin)/monthly-bills.tsx - FIXED VERSION
 import React, { useState, useLayoutEffect, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
 import { Receipt, DollarSign, Calendar, CreditCard, CheckCircle, X, User, Mail, Download, FileText, Search, ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -37,14 +37,12 @@ export default function MonthlyBillsScreen() {
       end.setHours(23, 59, 59, 999);
       return { startDate: start, endDate: end };
     } else if (startDate) {
-      // Single day selection
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
       const end = new Date(startDate);
       end.setHours(23, 59, 59, 999);
       return { startDate: start, endDate: end };
     } else {
-      // Default to current month
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       start.setHours(0, 0, 0, 0);
@@ -56,7 +54,6 @@ export default function MonthlyBillsScreen() {
 
   const dateRange = useMemo(() => getDateRange(), [startDate, endDate]);
 
-  // Get display text for selected dates
   const getDateDisplayText = () => {
     if (startDate && endDate && startDate.getTime() !== endDate.getTime()) {
       return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -80,14 +77,11 @@ export default function MonthlyBillsScreen() {
     const selected = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
 
     if (!isSelectingRange) {
-      // First selection - start new range
       setStartDate(selected);
       setEndDate(null);
       setIsSelectingRange(true);
     } else {
-      // Second selection - complete range
       if (selected < startDate!) {
-        // Selected date is before start, swap them
         setEndDate(startDate);
         setStartDate(selected);
       } else {
@@ -144,25 +138,33 @@ export default function MonthlyBillsScreen() {
     });
   }, [orders, dateRange]);
 
-  // Calculate balances for customers
+  // ✅ FIX: Calculate customers with balance using ACTUAL database balance
   const customersWithBalance = useMemo(() => {
-    const customerOrderMap = new Map<string, number>();
+    // Get period order totals for display purposes only
+    const customerPeriodOrders = new Map<string, number>();
 
     ordersInPeriod.forEach(order => {
-      const currentTotal = customerOrderMap.get(order.customerId) || 0;
-      customerOrderMap.set(order.customerId, currentTotal + order.totalAmount);
+      const currentTotal = customerPeriodOrders.get(order.customerId) || 0;
+      customerPeriodOrders.set(order.customerId, currentTotal + order.totalAmount);
     });
 
+    // Filter customers who:
+    // 1. Are monthly payment type
+    // 2. Have actual outstanding balance in database (not just in period)
     const result = customers
-      .filter(customer =>
-        customer.paymentType === 'monthly' &&
-        customerOrderMap.has(customer.id)
+      .filter(customer => 
+        customer.paymentType === 'monthly' && 
+        customer.monthlyBalance > 0  // ✅ Use actual database balance
       )
       .map(customer => ({
         ...customer,
-        periodBalance: customerOrderMap.get(customer.id) || 0
-      }))
-      .filter(customer => customer.periodBalance > 0);
+        periodOrders: customerPeriodOrders.get(customer.id) || 0, // For display only
+      }));
+
+    console.log('📊 Customers with balance:', result.length);
+    result.forEach(c => {
+      console.log(`  - ${c.name}: Balance=${c.monthlyBalance}, Period Orders=${c.periodOrders}`);
+    });
 
     return result;
   }, [customers, ordersInPeriod]);
@@ -198,17 +200,25 @@ export default function MonthlyBillsScreen() {
     });
   }, [customersWithBalance, searchQuery]);
 
+  // ✅ FIX: Use actual database balance for total
   const totalOutstanding = useMemo(() => {
-    return filteredCustomers.reduce((sum, customer) => sum + customer.periodBalance, 0);
+    return filteredCustomers.reduce((sum, customer) => sum + customer.monthlyBalance, 0);
   }, [filteredCustomers]);
 
   const getCustomerOrders = (customerId: string) => {
     return ordersInPeriod.filter(order => order.customerId === customerId);
   };
 
-  const handlePayment = (customer: Customer & { periodBalance: number }) => {
+  const handlePayment = (customer: Customer & { periodOrders: number }) => {
+    console.log('💳 Opening payment modal for:', {
+      name: customer.name,
+      actualBalance: customer.monthlyBalance,
+      periodOrders: customer.periodOrders
+    });
+    
     setSelectedCustomer(customer);
-    setPaymentAmount(customer.periodBalance.toString());
+    // ✅ FIX: Pre-fill with actual balance, not period orders
+    setPaymentAmount(customer.monthlyBalance.toString());
     setShowPaymentModal(true);
   };
 
@@ -216,7 +226,14 @@ export default function MonthlyBillsScreen() {
     if (!selectedCustomer) return;
 
     const amount = parseFloat(paymentAmount);
-    const customerBalance = (selectedCustomer as any).periodBalance;
+    // ✅ FIX: Use actual database balance for validation
+    const customerBalance = selectedCustomer.monthlyBalance;
+
+    console.log('💰 Processing payment:', { 
+      customer: selectedCustomer.name,
+      amount, 
+      currentBalance: customerBalance 
+    });
 
     if (isNaN(amount) || amount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
@@ -224,18 +241,27 @@ export default function MonthlyBillsScreen() {
     }
 
     if (amount > customerBalance) {
-      Alert.alert('Amount Too High', 'Payment amount cannot exceed outstanding balance');
+      Alert.alert('Amount Too High', `Payment amount cannot exceed outstanding balance of ${formatCurrency(customerBalance)}`);
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      const newBalance = selectedCustomer.monthlyBalance - amount;
+      const newBalance = customerBalance - amount;
+
+      console.log('📝 Updating customer balance:', {
+        customerId: selectedCustomer.id,
+        oldBalance: customerBalance,
+        paymentAmount: amount,
+        newBalance
+      });
 
       await updateCustomerInSupabase(selectedCustomer.id, {
         monthlyBalance: newBalance
       });
+
+      console.log('✅ Payment processed successfully');
 
       Alert.alert(
         'Payment Successful! ✅',
@@ -256,7 +282,7 @@ export default function MonthlyBillsScreen() {
         ]
       );
     } catch (error) {
-      console.error('Payment processing error:', error);
+      console.error('❌ Payment processing error:', error);
       Alert.alert('Error', 'Failed to process payment. Please try again.');
     } finally {
       setIsProcessing(false);
@@ -345,7 +371,7 @@ export default function MonthlyBillsScreen() {
                     <div class="customer-contact">📧 ${customer.email}</div>
                     ${customer.phone ? `<div class="customer-contact">📱 ${customer.phone}</div>` : ''}
                   </td>
-                  <td>${formatCurrency(customer.periodBalance)}</td>
+                  <td>${formatCurrency(customer.monthlyBalance)}</td>
                 </tr>
               `).join('')}
               
@@ -387,18 +413,15 @@ export default function MonthlyBillsScreen() {
     }
   };
 
-  // Render calendar grid
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentCalendarMonth);
     const firstDay = getFirstDayOfMonth(currentCalendarMonth);
     const days = [];
 
-    // Empty cells before first day
     for (let i = 0; i < firstDay; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calendarDayEmpty} />);
     }
 
-    // Days of month
     for (let day = 1; day <= daysInMonth; day++) {
       const isInRange = isDateInRange(day);
       const isStart = isDateStart(day);
@@ -520,7 +543,7 @@ export default function MonthlyBillsScreen() {
                 <>
                   <CheckCircle size={64} color="#0EA5E9" strokeWidth={1} />
                   <Text style={styles.emptyText}>All Clear!</Text>
-                  <Text style={styles.emptySubtext}>No outstanding balances for selected period</Text>
+                  <Text style={styles.emptySubtext}>No outstanding balances</Text>
                 </>
               )}
             </View>
@@ -552,39 +575,45 @@ export default function MonthlyBillsScreen() {
 
                   <View style={styles.balanceSection}>
                     <View style={styles.balanceRow}>
-                      <Text style={styles.balanceLabel}>Period Balance</Text>
-                      <Text style={styles.balanceAmount}>{formatCurrency(customer.periodBalance)}</Text>
+                      <Text style={styles.balanceLabel}>Total Outstanding</Text>
+                      <Text style={styles.balanceAmount}>{formatCurrency(customer.monthlyBalance)}</Text>
                     </View>
                     <View style={styles.balanceRow}>
-                      <Text style={styles.totalSpentLabel}>Total Spent</Text>
+                      <Text style={styles.totalSpentLabel}>Orders in Period</Text>
+                      <Text style={styles.totalSpentAmount}>{formatCurrency(customer.periodOrders)}</Text>
+                    </View>
+                    <View style={styles.balanceRow}>
+                      <Text style={styles.totalSpentLabel}>Total Spent (All Time)</Text>
                       <Text style={styles.totalSpentAmount}>{formatCurrency(customer.totalSpent)}</Text>
                     </View>
                   </View>
 
-                  <View style={styles.orderSummary}>
-                    <View style={styles.orderSummaryHeader}>
-                      <Calendar size={16} color="#6B7280" strokeWidth={2} />
-                      <Text style={styles.orderSummaryTitle}>
-                        {customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''} in period
-                      </Text>
-                    </View>
-
-                    {customerOrders.slice(0, 3).map((order) => (
-                      <View key={order.id} style={styles.orderItem}>
-                        <Text style={styles.orderDate}>
-                          {new Date(order.createdAt).toLocaleDateString()}
+                  {customerOrders.length > 0 && (
+                    <View style={styles.orderSummary}>
+                      <View style={styles.orderSummaryHeader}>
+                        <Calendar size={16} color="#6B7280" strokeWidth={2} />
+                        <Text style={styles.orderSummaryTitle}>
+                          {customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''} in period
                         </Text>
-                        <Text style={styles.orderId}>#{order.id.slice(-6)}</Text>
-                        <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
                       </View>
-                    ))}
 
-                    {customerOrders.length > 3 && (
-                      <Text style={styles.moreOrders}>
-                        + {customerOrders.length - 3} more order{customerOrders.length - 3 !== 1 ? 's' : ''}
-                      </Text>
-                    )}
-                  </View>
+                      {customerOrders.slice(0, 3).map((order) => (
+                        <View key={order.id} style={styles.orderItem}>
+                          <Text style={styles.orderDate}>
+                            {new Date(order.createdAt).toLocaleDateString()}
+                          </Text>
+                          <Text style={styles.orderId}>#{order.id.slice(-6)}</Text>
+                          <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
+                        </View>
+                      ))}
+
+                      {customerOrders.length > 3 && (
+                        <Text style={styles.moreOrders}>
+                          + {customerOrders.length - 3} more order{customerOrders.length - 3 !== 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </View>
+                  )}
 
                   <TouchableOpacity
                     style={styles.payButton}
@@ -707,10 +736,9 @@ export default function MonthlyBillsScreen() {
                 <View style={styles.modalBalanceInfo}>
                   <Text style={styles.modalBalanceLabel}>Outstanding Balance</Text>
                   <Text style={styles.modalBalanceAmount}>
-                    {formatCurrency((selectedCustomer as any).periodBalance)}
+                    {formatCurrency(selectedCustomer.monthlyBalance)}
                   </Text>
                 </View>
-
 
                 <View style={styles.paymentInputContainer}>
                   <Text style={styles.inputLabel}>Payment Amount</Text>
@@ -759,31 +787,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-    gap: 6,
-  },
-  headerNavButton: {
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: '#F3F4F6',
-  },
-  headerMonthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3E2',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 4,
-  },
-  headerMonthText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#1F2937',
   },
   scrollContent: {
     paddingTop: 16,
