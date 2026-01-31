@@ -1,4 +1,4 @@
-// app/(tabs)/reception-dashboard.tsx - FIXED VERSION
+// app/(tabs)/reception-index.tsx - FIXED VERSION
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { LayoutDashboard, ShoppingBag, CheckCircle, DollarSign, Clock, Search, UserPlus } from 'lucide-react-native';
