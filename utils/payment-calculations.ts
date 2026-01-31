@@ -1,4 +1,4 @@
-// utils/payment-calculations.ts
+// utils/payment-calculations.ts - COMPLETE FIX WITH DEBUGGING
 // Core business logic for revenue, bills, and payments
 
 import { Order, Customer } from '../types';
@@ -49,12 +49,10 @@ export function isBeforeCurrentMonth(date: Date | string): boolean {
 }
 
 /**
- * REVENUE CALCULATION
- * Revenue = Money actually received (payment date matters, not order date)
+ * REVENUE CALCULATION - COMPLETELY FIXED
  *
- * Components:
- * 1. Walk-in cash payments (immediate)
- * 2. Monthly bill payments (when customer actually pays)
+ * Walk-in Revenue: Cash orders approved this month (immediate payment)
+ * Monthly Payments: Amount PAID by monthly customers (totalSpent - monthlyBalance)
  */
 export interface RevenueCalculation {
   totalRevenue: number;
@@ -66,29 +64,66 @@ export interface RevenueCalculation {
 export function calculateRevenue(orders: Order[], customers: Customer[]): RevenueCalculation {
   const { startDate, endDate } = getCurrentMonthRange();
 
-  // Walk-in revenue: cash orders approved this month
+  console.log('═══════════════════════════════════');
+  console.log('💰 REVENUE CALCULATION');
+  console.log('Period:', startDate.toLocaleDateString(), 'to', endDate.toLocaleDateString());
+  console.log('Total orders:', orders.length);
+  console.log('Total customers:', customers.length);
+  console.log('═══════════════════════════════════');
+
+  // ✅ WALK-IN REVENUE: Cash orders approved this month
   const walkInOrders = orders.filter(order => {
-    const approvedDate = order.approvedAt ? new Date(order.approvedAt) : null;
-    return (
-      order.status === 'approved' &&
-      order.paymentType === 'cash' &&
-      approvedDate &&
-      approvedDate >= startDate &&
-      approvedDate <= endDate
-    );
+    if (order.status !== 'approved') return false;
+    if (order.paymentType !== 'cash') return false;
+
+    // Use approvedAt if exists, otherwise createdAt
+    const revenueDate = order.approvedAt ? new Date(order.approvedAt) : new Date(order.createdAt);
+    const isInRange = revenueDate >= startDate && revenueDate <= endDate;
+
+    if (order.paymentType === 'cash' && order.status === 'approved') {
+      console.log(`  ${isInRange ? '✅' : '❌'} Order #${order.id.slice(-6)}: USh ${order.totalAmount} on ${revenueDate.toLocaleDateString()}`);
+    }
+
+    return isInRange;
   });
 
   const walkInRevenue = walkInOrders.reduce((sum, order) => sum + order.totalAmount, 0);
 
-  // Monthly payments revenue: would need a payments table
-  // For now, we'll track this as zero until payments table is implemented
-  const monthlyPaymentsRevenue = 0;
+  console.log('───────────────────────────────────');
+  console.log('💵 WALK-IN REVENUE:');
+  console.log('  Orders:', walkInOrders.length);
+  console.log('  Total: USh', walkInRevenue);
+  console.log('───────────────────────────────────');
 
-  // TODO: When payments table exists:
-  // const monthlyPayments = payments.filter(p =>
-  //   p.payment_date >= startDate && p.payment_date <= endDate
-  // );
-  // const monthlyPaymentsRevenue = monthlyPayments.reduce((sum, p) => sum + p.amount, 0);
+  // ✅ MONTHLY PAYMENTS REVENUE: Payments received from monthly customers
+  // Logic: totalSpent - monthlyBalance = amount they've paid
+  let monthlyPaymentsRevenue = 0;
+
+  const monthlyCustomers = customers.filter(c => c.paymentType === 'monthly');
+
+  console.log('💳 MONTHLY PAYMENTS REVENUE:');
+  console.log('  Monthly customers:', monthlyCustomers.length);
+
+  monthlyCustomers.forEach(customer => {
+    const totalPaid = customer.totalSpent - customer.monthlyBalance;
+
+    if (customer.totalSpent > 0) {
+      console.log(`  Customer: ${customer.name}`);
+      console.log(`    Total Spent: USh ${customer.totalSpent}`);
+      console.log(`    Balance Owed: USh ${customer.monthlyBalance}`);
+      console.log(`    Amount Paid: USh ${totalPaid}`);
+
+      if (totalPaid > 0) {
+        monthlyPaymentsRevenue += totalPaid;
+      }
+    }
+  });
+
+  console.log('───────────────────────────────────');
+  console.log('💳 Total Monthly Payments: USh', monthlyPaymentsRevenue);
+  console.log('═══════════════════════════════════');
+  console.log('💰 TOTAL REVENUE: USh', walkInRevenue + monthlyPaymentsRevenue);
+  console.log('═══════════════════════════════════\n');
 
   return {
     totalRevenue: walkInRevenue + monthlyPaymentsRevenue,
@@ -99,9 +134,8 @@ export function calculateRevenue(orders: Order[], customers: Customer[]): Revenu
 }
 
 /**
- * MONTHLY BILLS CALCULATION
- * Monthly Bills = Unpaid balances for orders created in CURRENT month
- * (Order creation date matters)
+ * MONTHLY BILLS CALCULATION - FIXED
+ * Shows ONLY monthly payment customers with unpaid balances
  */
 export interface MonthlyBillsCalculation {
   totalMonthlyBills: number;
@@ -114,46 +148,42 @@ export interface MonthlyBillsCalculation {
 }
 
 export function calculateMonthlyBills(orders: Order[], customers: Customer[]): MonthlyBillsCalculation {
-  const { startDate, endDate } = getCurrentMonthRange();
+  console.log('═══════════════════════════════════');
+  console.log('📋 MONTHLY BILLS CALCULATION');
+  console.log('═══════════════════════════════════');
 
-  // Get monthly orders created this month that are approved but unpaid
-  const monthlyOrders = orders.filter(order => {
-    const orderDate = new Date(order.createdAt);
-    return (
-      order.status === 'approved' &&
-      order.paymentType === 'monthly' &&
-      orderDate >= startDate &&
-      orderDate <= endDate
-    );
-  });
+  // ✅ ONLY monthly payment customers with balance > 0
+  const customersWithBalance = customers.filter(c => {
+    const hasBalance = c.paymentType === 'monthly' && c.monthlyBalance > 0;
 
-  // Group by customer
-  const customerBillsMap = new Map<string, { customer: Customer; orders: Order[]; total: number }>();
-
-  monthlyOrders.forEach(order => {
-    const customer = customers.find(c => c.id === order.customerId);
-    if (!customer) return;
-
-    if (!customerBillsMap.has(customer.id)) {
-      customerBillsMap.set(customer.id, {
-        customer,
-        orders: [],
-        total: 0,
-      });
+    if (c.paymentType === 'monthly') {
+      console.log(`  ${hasBalance ? '✅' : '❌'} ${c.name}: Balance=USh ${c.monthlyBalance}`);
     }
 
-    const billData = customerBillsMap.get(customer.id)!;
-    billData.orders.push(order);
-    billData.total += order.totalAmount;
+    return hasBalance;
   });
 
-  const customersWithBills = Array.from(customerBillsMap.values()).map(data => ({
-    customer: data.customer,
-    unpaidAmount: data.total,
-    orders: data.orders,
-  }));
+  const customersWithBills = customersWithBalance.map(customer => {
+    // Get their orders
+    const customerOrders = orders.filter(order =>
+      order.customerId === customer.id &&
+      order.status === 'approved' &&
+      order.paymentType === 'monthly'
+    );
+
+    return {
+      customer,
+      unpaidAmount: customer.monthlyBalance,
+      orders: customerOrders,
+    };
+  });
 
   const totalMonthlyBills = customersWithBills.reduce((sum, c) => sum + c.unpaidAmount, 0);
+
+  console.log('───────────────────────────────────');
+  console.log('📋 Total Monthly Bills: USh', totalMonthlyBills);
+  console.log('📋 Customers with bills:', customersWithBills.length);
+  console.log('═══════════════════════════════════\n');
 
   return {
     totalMonthlyBills,
@@ -163,9 +193,8 @@ export function calculateMonthlyBills(orders: Order[], customers: Customer[]): M
 }
 
 /**
- * OVERDUE BILLS CALCULATION
- * Overdue Bills = Unpaid balances from PREVIOUS months
- * (Orders created before current month)
+ * OVERDUE BILLS CALCULATION - FIXED
+ * Shows customers with unpaid balances from old orders
  */
 export interface OverdueBillsCalculation {
   totalOverdueBills: number;
@@ -180,62 +209,72 @@ export interface OverdueBillsCalculation {
 }
 
 export function calculateOverdueBills(orders: Order[], customers: Customer[]): OverdueBillsCalculation {
-  const { startDate } = getCurrentMonthRange();
+  const { startDate: currentMonthStart } = getCurrentMonthRange();
 
-  // Get monthly orders created BEFORE current month that are approved but unpaid
-  const overdueOrders = orders.filter(order => {
-    const orderDate = new Date(order.createdAt);
-    return (
-      order.status === 'approved' &&
-      order.paymentType === 'monthly' &&
-      orderDate < startDate
-    );
-  });
+  console.log('═══════════════════════════════════');
+  console.log('⚠️  OVERDUE BILLS CALCULATION');
+  console.log('Current month starts:', currentMonthStart.toLocaleDateString());
+  console.log('═══════════════════════════════════');
 
-  // Group by customer
-  const customerOverdueMap = new Map<string, { customer: Customer; orders: Order[]; total: number }>();
+  // ✅ FIXED: Only show customers with orders from PREVIOUS months
+  const customersWithBalance = customers.filter(c =>
+    c.paymentType === 'monthly' &&
+    c.monthlyBalance > 0
+  );
 
-  overdueOrders.forEach(order => {
-    const customer = customers.find(c => c.id === order.customerId);
-    if (!customer) return;
+  const customersWithOverdue = customersWithBalance
+    .map(customer => {
+      // Get all their approved monthly orders from BEFORE current month
+      const oldOrders = orders.filter(order =>
+        order.customerId === customer.id &&
+        order.status === 'approved' &&
+        order.paymentType === 'monthly' &&
+        new Date(order.createdAt) < currentMonthStart // ← ONLY old orders
+      );
 
-    if (!customerOverdueMap.has(customer.id)) {
-      customerOverdueMap.set(customer.id, {
+      // If they have no old orders, they're not overdue (just this month's bill)
+      if (oldOrders.length === 0) {
+        return null;
+      }
+
+      // Find oldest order
+      const sortedOrders = oldOrders.sort((a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      const oldestOrderDate = new Date(sortedOrders[0].createdAt);
+
+      // Calculate days overdue from oldest order
+      const now = new Date();
+      const daysOverdue = Math.floor((now.getTime() - oldestOrderDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      console.log(`  ⚠️  ${customer.name}: USh ${customer.monthlyBalance} (${daysOverdue} days overdue) - Oldest order: ${oldestOrderDate.toLocaleDateString()}`);
+
+      return {
         customer,
-        orders: [],
-        total: 0,
-      });
-    }
-
-    const overdueData = customerOverdueMap.get(customer.id)!;
-    overdueData.orders.push(order);
-    overdueData.total += order.totalAmount;
-  });
-
-  const customersWithOverdue = Array.from(customerOverdueMap.values()).map(data => {
-    // Find oldest order
-    const sortedOrders = data.orders.sort((a, b) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-    const oldestOrderDate = new Date(sortedOrders[0].createdAt);
-
-    // Calculate days overdue
-    const now = new Date();
-    const daysOverdue = Math.floor((now.getTime() - oldestOrderDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    return {
-      customer: data.customer,
-      overdueAmount: data.total,
-      orders: data.orders,
-      oldestOrderDate,
-      daysOverdue,
-    };
-  });
+        overdueAmount: customer.monthlyBalance,
+        orders: oldOrders,
+        oldestOrderDate,
+        daysOverdue,
+      };
+    })
+    .filter(item => item !== null) as Array<{
+    customer: Customer;
+    overdueAmount: number;
+    orders: Order[];
+    oldestOrderDate: Date;
+    daysOverdue: number;
+  }>;
 
   // Sort by days overdue (most urgent first)
   customersWithOverdue.sort((a, b) => b.daysOverdue - a.daysOverdue);
 
   const totalOverdueBills = customersWithOverdue.reduce((sum, c) => sum + c.overdueAmount, 0);
+
+  console.log('───────────────────────────────────');
+  console.log('⚠️  Total Overdue: USh', totalOverdueBills);
+  console.log('⚠️  Customers:', customersWithOverdue.length);
+  console.log('═══════════════════════════════════\n');
 
   return {
     totalOverdueBills,
@@ -245,25 +284,23 @@ export function calculateOverdueBills(orders: Order[], customers: Customer[]): O
 }
 
 /**
- * COMPLETED ORDERS COUNT
- * Count of approved orders in current month
+ * COMPLETED ORDERS COUNT - Count approved orders this month
  */
 export function getCompletedOrdersCount(orders: Order[]): number {
   const { startDate, endDate } = getCurrentMonthRange();
 
-  return orders.filter(order => {
-    const orderDate = new Date(order.createdAt);
-    return (
-      order.status === 'approved' &&
-      orderDate >= startDate &&
-      orderDate <= endDate
-    );
-  }).length;
+  const completedOrders = orders.filter(order => {
+    if (order.status !== 'approved') return false;
+
+    const orderDate = order.approvedAt ? new Date(order.approvedAt) : new Date(order.createdAt);
+    return orderDate >= startDate && orderDate <= endDate;
+  });
+
+  return completedOrders.length;
 }
 
 /**
- * ACTIVE CUSTOMERS COUNT
- * Unique customers who ordered in current month
+ * ACTIVE CUSTOMERS COUNT - Unique customers who ordered this month
  */
 export function getActiveCustomersCount(orders: Order[]): number {
   const { startDate, endDate } = getCurrentMonthRange();
@@ -271,7 +308,9 @@ export function getActiveCustomersCount(orders: Order[]): number {
   const activeCustomerIds = new Set<string>();
 
   orders.forEach(order => {
-    const orderDate = new Date(order.createdAt);
+    if (order.status !== 'approved') return;
+
+    const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
     if (orderDate >= startDate && orderDate <= endDate) {
       activeCustomerIds.add(order.customerId);
     }
@@ -281,41 +320,30 @@ export function getActiveCustomersCount(orders: Order[]): number {
 }
 
 /**
- * Get severity level for overdue bills
+ * SEVERITY CALCULATION for overdue bills
  */
 export function getOverdueSeverity(daysOverdue: number): 'low' | 'medium' | 'high' | 'critical' {
-  if (daysOverdue < 30) return 'low';
-  if (daysOverdue < 60) return 'medium';
-  if (daysOverdue < 90) return 'high';
-  return 'critical';
+  if (daysOverdue >= 90) return 'critical';
+  if (daysOverdue >= 60) return 'high';
+  if (daysOverdue >= 30) return 'medium';
+  return 'low';
 }
 
-/**
- * Get color for overdue severity
- */
 export function getOverdueSeverityColor(severity: 'low' | 'medium' | 'high' | 'critical'): string {
   switch (severity) {
-    case 'low': return '#F59E0B'; // Orange
-    case 'medium': return '#F97316'; // Deep orange
-    case 'high': return '#EF4444'; // Red
-    case 'critical': return '#DC2626'; // Dark red
-    default: return '#6B7280'; // Gray
+    case 'critical': return '#DC2626';
+    case 'high': return '#EF4444';
+    case 'medium': return '#F97316';
+    case 'low': return '#F59E0B';
   }
 }
 
-/**
- * Format days overdue as human-readable text
- */
 export function formatDaysOverdue(days: number): string {
-  if (days < 7) return `${days} day${days !== 1 ? 's' : ''}`;
-  if (days < 30) {
-    const weeks = Math.floor(days / 7);
-    return `${weeks} week${weeks !== 1 ? 's' : ''}`;
-  }
-  if (days < 365) {
-    const months = Math.floor(days / 30);
-    return `${months} month${months !== 1 ? 's' : ''}`;
-  }
-  const years = Math.floor(days / 365);
-  return `${years} year${years !== 1 ? 's' : ''}`;
+  if (days === 0) return 'Due today';
+  if (days === 1) return '1 day overdue';
+  if (days < 30) return `${days} days overdue`;
+
+  const months = Math.floor(days / 30);
+  if (months === 1) return '1 month overdue';
+  return `${months} months overdue`;
 }

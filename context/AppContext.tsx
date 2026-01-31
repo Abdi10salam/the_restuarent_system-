@@ -1,4 +1,4 @@
-// context/AppContext.tsx - FINAL CORRECTED VERSION
+// context/AppContext.tsx - WITH REAL-TIME UPDATES
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { CartItem, Order, Dish, Customer, MonthlyBill } from '../types';
 import { supabase } from "../app/lib/supabase";
@@ -62,13 +62,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
         cart: [...state.cart, { dish: action.dish, quantity: 1 }],
       };
     }
-    
+
     case 'REMOVE_FROM_CART':
       return {
         ...state,
         cart: state.cart.filter(item => item.dish.id !== action.dishId),
       };
-    
+
     case 'UPDATE_QUANTITY':
       if (action.quantity === 0) {
         return {
@@ -84,16 +84,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
             : item
         ),
       };
-    
+
     case 'CLEAR_CART':
       return { ...state, cart: [] };
-    
+
     case 'PLACE_ORDER': {
       const totalAmount = state.cart.reduce(
         (sum, item) => sum + item.dish.price * item.quantity,
         0
       );
-      
+
       const newOrder: Order = {
         id: Date.now().toString(),
         customerId: action.customerId,
@@ -105,22 +105,22 @@ function appReducer(state: AppState, action: AppAction): AppState {
         paymentType: action.paymentType,
         createdAt: new Date().toISOString(),
       };
-      
+
       return {
         ...state,
         cart: [],
         orders: [newOrder, ...state.orders],
       };
     }
-    
+
     case 'UPDATE_ORDER_STATUS': {
       const updatedOrders = state.orders.map(order =>
         order.id === action.orderId
           ? {
-              ...order,
-              status: action.status,
-              [action.status === 'approved' ? 'approvedAt' : 'rejectedAt']: new Date().toISOString(),
-            }
+            ...order,
+            status: action.status,
+            [action.status === 'approved' ? 'approvedAt' : 'rejectedAt']: new Date().toISOString(),
+          }
           : order
       );
 
@@ -149,7 +149,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         dishes: updatedDishes,
       };
     }
-    
+
     case 'SET_CUSTOMERS':
       return { ...state, customers: action.customers };
 
@@ -162,25 +162,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
           ? { ...customer, ...action.updates }
           : customer
       );
-      
+
       console.log('🔄 Customer updated in state:', {
         customerId: action.customerId,
         updates: action.updates,
         newBalance: updatedCustomers.find(c => c.id === action.customerId)?.monthlyBalance
       });
-      
+
       return {
         ...state,
         customers: updatedCustomers,
       };
     }
-    
+
     case 'SET_DISHES':
       return { ...state, dishes: action.dishes };
 
     case 'ADD_DISH':
       return { ...state, dishes: [...state.dishes, action.dish] };
-    
+
     case 'UPDATE_DISH':
       return {
         ...state,
@@ -190,26 +190,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
             : dish
         ),
       };
-    
+
     case 'DELETE_DISH':
       return { ...state, dishes: state.dishes.filter(dish => dish.id !== action.dishId) };
-    
+
     case 'SET_ORDERS':
       return { ...state, orders: action.orders };
 
     case 'ADD_ORDER':
       return { ...state, orders: [action.order, ...state.orders] };
-    
+
     case 'GENERATE_MONTHLY_BILL': {
       const customer = state.customers.find(c => c.id === action.customerId);
       if (!customer || customer.monthlyBalance === 0) return state;
-      
+
       const customerOrders = state.orders.filter(
-        order => order.customerId === action.customerId && 
-                order.status === 'approved' && 
-                order.paymentType === 'monthly'
+        order => order.customerId === action.customerId &&
+          order.status === 'approved' &&
+          order.paymentType === 'monthly'
       );
-      
+
       const currentDate = new Date();
       const bill: MonthlyBill = {
         id: Date.now().toString(),
@@ -221,17 +221,17 @@ function appReducer(state: AppState, action: AppAction): AppState {
         isPaid: false,
         generatedAt: new Date().toISOString(),
       };
-      
+
       return { ...state, monthlyBills: [...state.monthlyBills, bill] };
     }
-    
+
     case 'MARK_BILL_PAID': {
       const updatedBills = state.monthlyBills.map(bill =>
         bill.id === action.billId
           ? { ...bill, isPaid: true, paidAt: new Date().toISOString() }
           : bill
       );
-      
+
       const bill = state.monthlyBills.find(b => b.id === action.billId);
       if (bill) {
         const updatedCustomers = state.customers.map(customer =>
@@ -239,16 +239,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
             ? { ...customer, monthlyBalance: 0 }
             : customer
         );
-        
+
         return { ...state, monthlyBills: updatedBills, customers: updatedCustomers };
       }
-      
+
       return { ...state, monthlyBills: updatedBills };
     }
 
     case 'SET_LOADING':
       return { ...state, isLoading: action.loading };
-    
+
     default:
       return state;
   }
@@ -276,18 +276,87 @@ export function AppProvider({ children }: { children: ReactNode }) {
     initializeApp();
   }, []);
 
+  // 🆕 REAL-TIME SUBSCRIPTIONS FOR LIVE DASHBOARD UPDATES
+  useEffect(() => {
+    console.log('🔴 Setting up real-time subscriptions...');
+
+    // Subscribe to orders table changes
+    const ordersSubscription = supabase
+      .channel('orders-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'orders',
+        },
+        (payload) => {
+          console.log('📦 Order changed!', payload.eventType, payload.new);
+          // Auto-refresh orders when any change happens
+          fetchOrdersFromSupabase();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to customers table changes (for balance updates)
+    const customersSubscription = supabase
+      .channel('customers-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'customers',
+        },
+        (payload) => {
+          console.log('👤 Customer updated!', payload.new);
+          // Auto-refresh customers when balance changes
+          fetchCustomersFromSupabase();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to dishes table changes (for stock updates)
+    const dishesSubscription = supabase
+      .channel('dishes-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'dishes',
+        },
+        (payload) => {
+          console.log('🍽️ Dish changed!', payload.eventType);
+          // Auto-refresh dishes
+          fetchDishesFromSupabase();
+        }
+      )
+      .subscribe();
+
+    console.log('✅ Real-time subscriptions active');
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      console.log('🔴 Cleaning up subscriptions...');
+      ordersSubscription.unsubscribe();
+      customersSubscription.unsubscribe();
+      dishesSubscription.unsubscribe();
+    };
+  }, []); // Empty dependency array - set up once on mount
+
   const initializeApp = async () => {
     try {
       console.log('🚀 Initializing app...');
-      
+
       await ensureWalkInCustomerExists();
-      
+
       await Promise.all([
         fetchCustomersFromSupabase(),
         fetchDishesFromSupabase(),
         fetchOrdersFromSupabase(),
       ]);
-      
+
       console.log('✅ App initialized successfully');
     } catch (error) {
       console.error('❌ App initialization failed:', error);
@@ -297,7 +366,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchCustomersFromSupabase = async () => {
     try {
       console.log('📥 Fetching customers from Supabase...');
-      
+
       const { data, error } = await supabase
         .from('customers')
         .select('*')
@@ -326,7 +395,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.log(`  📊 ${c.name}: Balance=${c.monthlyBalance}, TotalSpent=${c.totalSpent}`);
         }
       });
-      
+
       dispatch({ type: 'SET_CUSTOMERS', customers });
     } catch (error: any) {
       console.error('❌ Error fetching customers:', error.message);
@@ -335,8 +404,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addCustomerToSupabase = async (customer: Customer, adminEmail: string): Promise<number> => {
     try {
-      const customerNumber = customer.role === 'customer' 
-        ? await generateCustomerNumber() 
+      const customerNumber = customer.role === 'customer'
+        ? await generateCustomerNumber()
         : 0;
 
       const { data, error } = await supabase
@@ -376,7 +445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
 
       dispatch({ type: 'ADD_CUSTOMER', customer: newCustomer });
-      
+
       return customerNumber;
     } catch (error: any) {
       console.error('❌ Error adding customer:', error.message);
@@ -390,7 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ) => {
     try {
       console.log('💾 Updating customer in Supabase:', { customerId, updates });
-      
+
       const updateData: any = {};
 
       if (updates.name !== undefined) updateData.name = updates.name;
@@ -413,9 +482,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log('✅ Customer updated in Supabase successfully');
 
       dispatch({ type: 'UPDATE_CUSTOMER', customerId, updates });
-      
+
       await fetchCustomersFromSupabase();
-      
+
     } catch (error: any) {
       console.error('❌ Error updating customer:', error.message);
       throw error;
@@ -488,7 +557,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateDishInSupabase = async (dishId: string, updates: Partial<Dish>) => {
     try {
       const updateData: any = {};
-      
+
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.description !== undefined) updateData.description = updates.description;
       if (updates.price !== undefined) updateData.price = updates.price;
@@ -605,7 +674,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateOrderStatusInSupabase = async (orderId: string, status: 'approved' | 'rejected') => {
     try {
       console.log(`📝 Updating order ${orderId} status to ${status}`);
-      
+
       const updateData: any = {
         status,
         [status === 'approved' ? 'approved_at' : 'rejected_at']: new Date().toISOString(),
@@ -624,10 +693,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Update dish stock
           for (const item of order.items) {
             const dish = state.dishes.find(d => d.id === item.dish.id);
-            
+
             if (dish && dish.stockQuantity !== null && dish.stockQuantity !== undefined) {
               const newStock = Math.max(0, dish.stockQuantity - item.quantity);
-              
+
               await supabase
                 .from('dishes')
                 .update({
@@ -638,13 +707,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          // ✅ FIX: Update customer balance correctly for monthly orders
+          // Update customer balance for monthly orders
           if (order.paymentType === 'monthly') {
             const customer = state.customers.find(c => c.id === order.customerId);
             if (customer) {
               const newMonthlyBalance = customer.monthlyBalance + order.totalAmount;
               const newTotalSpent = customer.totalSpent + order.totalAmount;
-              
+
               console.log(`💰 Updating customer balance:`, {
                 customer: customer.name,
                 oldBalance: customer.monthlyBalance,
@@ -664,7 +733,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       dispatch({ type: 'UPDATE_ORDER_STATUS', orderId, status });
       await fetchDishesFromSupabase();
-      
+
     } catch (error: any) {
       console.error('Error updating order status:', error.message);
       throw error;
@@ -672,9 +741,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AppContext.Provider 
-      value={{ 
-        state, 
+    <AppContext.Provider
+      value={{
+        state,
         dispatch,
         fetchCustomersFromSupabase,
         addCustomerToSupabase,

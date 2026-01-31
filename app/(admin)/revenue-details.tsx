@@ -1,10 +1,10 @@
-// app/(admin)/revenue-details.tsx - WITH DATE RANGE PICKER
+// app/(admin)/revenue-details.tsx - COMPLETELY FIXED
 import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal } from 'react-native';
-import { DollarSign, TrendingUp, Calendar, Clock, User, ShoppingBag, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+import { TrendingUp, Calendar, Clock, User, ShoppingBag, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
-import { getMonthRange } from '../../utils/payment-calculations';
+import { getMonthRange, calculateRevenue } from '../../utils/payment-calculations';
 
 export default function RevenueDetailsScreen() {
   const { state, fetchOrdersFromSupabase, fetchCustomersFromSupabase } = useApp();
@@ -38,29 +38,35 @@ export default function RevenueDetailsScreen() {
     }
   }, [startDate, endDate]);
 
-  // Calculate revenue for selected date range
+  // ✅ FIXED: Use the shared calculateRevenue function with filtered orders
   const revenueData = useMemo(() => {
-    const revenueOrders = orders.filter(order => {
-      const approvedDate = order.approvedAt ? new Date(order.approvedAt) : null;
-      return (
-        order.status === 'approved' &&
-        order.paymentType === 'cash' &&
-        approvedDate &&
-        approvedDate >= selectedDateRange.startDate &&
-        approvedDate <= selectedDateRange.endDate
-      );
+    console.log('📊 Revenue Details - Calculating for range:',
+      selectedDateRange.startDate.toLocaleDateString(),
+      'to',
+      selectedDateRange.endDate.toLocaleDateString()
+    );
+
+    // Filter orders by selected date range FIRST
+    const ordersInRange = orders.filter(order => {
+      const orderDate = order.approvedAt ? new Date(order.approvedAt) : new Date(order.createdAt);
+      return orderDate >= selectedDateRange.startDate &&
+        orderDate <= selectedDateRange.endDate;
     });
 
-    const walkInRevenue = revenueOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-    const monthlyPaymentsRevenue = 0; // TODO: Calculate from payments table
+    console.log('  Orders in range:', ordersInRange.length);
+    console.log('  Total orders:', orders.length);
 
-    return {
-      totalRevenue: walkInRevenue + monthlyPaymentsRevenue,
-      walkInRevenue,
-      monthlyPaymentsRevenue,
-      revenueOrders,
-    };
-  }, [orders, selectedDateRange]);
+    // Then use the calculation function with filtered orders
+    const result = calculateRevenue(ordersInRange, customers);
+
+    console.log('  Revenue result:', {
+      total: result.totalRevenue,
+      walkIn: result.walkInRevenue,
+      monthly: result.monthlyPaymentsRevenue,
+    });
+
+    return result;
+  }, [orders, customers, selectedDateRange]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -186,35 +192,31 @@ export default function RevenueDetailsScreen() {
     return days;
   };
 
-  const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-
-  // Group orders by date
-  const ordersByDate = useMemo(() => {
+  // Group orders by day for display
+  const ordersByDay = useMemo(() => {
     const grouped = new Map<string, typeof revenueData.revenueOrders>();
 
     revenueData.revenueOrders.forEach(order => {
-      const dateKey = new Date(order.approvedAt || order.createdAt).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
+      const orderDate = order.approvedAt ? new Date(order.approvedAt) : new Date(order.createdAt);
+      const dayKey = orderDate.toLocaleDateString('en-US', {
         year: 'numeric',
+        month: 'long',
+        day: 'numeric'
       });
 
-      if (!grouped.has(dateKey)) {
-        grouped.set(dateKey, []);
+      if (!grouped.has(dayKey)) {
+        grouped.set(dayKey, []);
       }
-      grouped.get(dateKey)!.push(order);
+      grouped.get(dayKey)!.push(order);
     });
 
-    // Convert to array and sort by date (newest first)
-    return Array.from(grouped.entries())
-      .map(([date, orders]) => ({
-        date,
-        orders,
-        total: orders.reduce((sum, o) => sum + o.totalAmount, 0),
-      }))
-      .sort((a, b) => new Date(b.orders[0].approvedAt || b.orders[0].createdAt).getTime() -
-        new Date(a.orders[0].approvedAt || a.orders[0].createdAt).getTime());
-  }, [revenueData]);
+    // Sort by date (most recent first)
+    return Array.from(grouped.entries()).sort((a, b) => {
+      const dateA = new Date(a[0]);
+      const dateB = new Date(b[0]);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [revenueData.revenueOrders]);
 
   return (
     <View style={styles.container}>
@@ -238,105 +240,94 @@ export default function RevenueDetailsScreen() {
         {/* Header Summary */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
-            <View style={styles.summaryIconContainer}>
-              <DollarSign size={32} color="#10B981" strokeWidth={2.5} />
-            </View>
-            <View style={styles.summaryBadge}>
-              <Calendar size={14} color="#10B981" strokeWidth={2} />
-              <Text style={styles.summaryBadgeText}>{currentMonth}</Text>
-            </View>
+            <TrendingUp size={28} color="#10B981" strokeWidth={2.5} />
+            <Text style={styles.summaryTitle}>Revenue Summary</Text>
           </View>
 
-          <Text style={styles.summaryLabel}>Total Revenue</Text>
-          <Text style={styles.summaryAmount}>{formatCurrency(revenueData.totalRevenue)}</Text>
+          <View style={styles.totalRevenueSection}>
+            <Text style={styles.totalRevenueLabel}>Total Revenue</Text>
+            <Text style={styles.totalRevenueAmount}>
+              {formatCurrency(revenueData.totalRevenue)}
+            </Text>
+          </View>
 
-          <View style={styles.summaryBreakdown}>
+          <View style={styles.breakdownSection}>
             <View style={styles.breakdownItem}>
-              <View style={styles.breakdownHeader}>
-                <ShoppingBag size={16} color="#F97316" strokeWidth={2} />
-                <Text style={styles.breakdownLabel}>Walk-in Cash</Text>
+              <View style={styles.breakdownIconContainer}>
+                <ShoppingBag size={20} color="#059669" strokeWidth={2} />
               </View>
-              <Text style={styles.breakdownValue}>{formatCurrency(revenueData.walkInRevenue)}</Text>
-              <Text style={styles.breakdownSubtext}>
-                {revenueData.revenueOrders.filter(o => o.paymentType === 'cash').length} transactions
-              </Text>
+              <View style={styles.breakdownDetails}>
+                <Text style={styles.breakdownLabel}>Walk-in Cash</Text>
+                <Text style={styles.breakdownAmount}>
+                  {formatCurrency(revenueData.walkInRevenue)}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.breakdownDivider} />
 
             <View style={styles.breakdownItem}>
-              <View style={styles.breakdownHeader}>
-                <TrendingUp size={16} color="#3B82F6" strokeWidth={2} />
-                <Text style={styles.breakdownLabel}>Monthly Payments</Text>
+              <View style={styles.breakdownIconContainer}>
+                <User size={20} color="#0284C7" strokeWidth={2} />
               </View>
-              <Text style={styles.breakdownValue}>{formatCurrency(revenueData.monthlyPaymentsRevenue)}</Text>
-              <Text style={styles.breakdownSubtext}>
-                {revenueData.revenueOrders.filter(o => o.paymentType === 'monthly').length} payments
-              </Text>
+              <View style={styles.breakdownDetails}>
+                <Text style={styles.breakdownLabel}>Monthly Payments</Text>
+                <Text style={styles.breakdownAmount}>
+                  {formatCurrency(revenueData.monthlyPaymentsRevenue)}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Daily Breakdown */}
+        {/* Daily Revenue Breakdown */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Revenue by Date</Text>
+          <Text style={styles.sectionTitle}>Daily Breakdown</Text>
 
-          {ordersByDate.length === 0 ? (
+          {ordersByDay.length === 0 ? (
             <View style={styles.emptyState}>
-              <DollarSign size={64} color="#D1D5DB" strokeWidth={1} />
-              <Text style={styles.emptyText}>No revenue this month</Text>
-              <Text style={styles.emptySubtext}>Revenue will appear here as orders are completed</Text>
+              <Calendar size={64} color="#CBD5E1" strokeWidth={1} />
+              <Text style={styles.emptyText}>No Revenue</Text>
+              <Text style={styles.emptySubtext}>
+                No orders found for this period
+              </Text>
             </View>
           ) : (
-            ordersByDate.map((dayData, index) => (
-              <View key={index} style={styles.dayCard}>
-                <View style={styles.dayHeader}>
-                  <View style={styles.dayHeaderLeft}>
-                    <Clock size={18} color="#6B7280" strokeWidth={2} />
-                    <Text style={styles.dayDate}>{dayData.date}</Text>
-                  </View>
-                  <Text style={styles.dayTotal}>{formatCurrency(dayData.total)}</Text>
-                </View>
+            ordersByDay.map(([date, dayOrders]) => {
+              const dayTotal = dayOrders.reduce((sum, order) => sum + order.totalAmount, 0);
 
-                <View style={styles.ordersContainer}>
-                  {dayData.orders.map((order) => (
-                    <View key={order.id} style={styles.orderRow}>
-                      <View style={styles.orderLeft}>
-                        <Text style={styles.orderId}>#{order.id.slice(-6)}</Text>
-                        <View style={styles.orderCustomerRow}>
-                          <User size={12} color="#6B7280" strokeWidth={2} />
-                          <Text style={styles.orderCustomerName}>{order.customerName}</Text>
-                        </View>
-                        {order.isWalkIn && (
-                          <View style={styles.walkInBadge}>
-                            <Text style={styles.walkInText}>Walk-in</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.orderRight}>
-                        <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
-                        <View style={[
-                          styles.paymentTypeBadge,
-                          order.paymentType === 'cash'
-                            ? styles.paymentTypeBadgeCash
-                            : styles.paymentTypeBadgeMonthly
-                        ]}>
-                          <Text style={[
-                            styles.paymentTypeText,
-                            order.paymentType === 'cash'
-                              ? styles.paymentTypeTextCash
-                              : styles.paymentTypeTextMonthly
-                          ]}>
-                            {order.paymentType === 'cash' ? 'Cash' : 'Monthly'}
-                          </Text>
-                        </View>
-                      </View>
+              return (
+                <View key={date} style={styles.dayCard}>
+                  <View style={styles.dayHeader}>
+                    <View style={styles.dayHeaderLeft}>
+                      <Clock size={18} color="#6B7280" strokeWidth={2} />
+                      <Text style={styles.dayDate}>{date}</Text>
                     </View>
-                  ))}
+                    <Text style={styles.dayTotal}>{formatCurrency(dayTotal)}</Text>
+                  </View>
+
+                  <View style={styles.dayOrders}>
+                    {dayOrders.map((order) => (
+                      <View key={order.id} style={styles.orderItem}>
+                        <View style={styles.orderInfo}>
+                          <View style={styles.orderCustomer}>
+                            <User size={14} color="#6B7280" strokeWidth={2} />
+                            <Text style={styles.orderCustomerName}>{order.customerName}</Text>
+                            {order.isWalkIn && (
+                              <View style={styles.walkInBadge}>
+                                <Text style={styles.walkInBadgeText}>Walk-in</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.orderId}>#{order.id.slice(-6)}</Text>
+                        </View>
+                        <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
 
@@ -452,86 +443,72 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 8,
-    borderLeftWidth: 6,
-    borderLeftColor: '#10B981',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   summaryHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     marginBottom: 16,
   },
-  summaryIconContainer: {
-    backgroundColor: '#D1FAE5',
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summaryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  summaryBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#10B981',
-  },
-  summaryLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  summaryAmount: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#10B981',
-    marginBottom: 20,
-  },
-  summaryBreakdown: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-  },
-  breakdownItem: {
-    flex: 1,
-  },
-  breakdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  breakdownLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  breakdownValue: {
+  summaryTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  totalRevenueSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  totalRevenueLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  totalRevenueAmount: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#10B981',
+  },
+  breakdownSection: {
+    flexDirection: 'row',
+    marginTop: 16,
+  },
+  breakdownItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  breakdownIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  breakdownDetails: {
+    flex: 1,
+  },
+  breakdownLabel: {
+    fontSize: 12,
+    color: '#6B7280',
     marginBottom: 4,
   },
-  breakdownSubtext: {
-    fontSize: 11,
-    color: '#9CA3AF',
+  breakdownAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
   },
   breakdownDivider: {
     width: 1,
@@ -549,7 +526,7 @@ const styles = StyleSheet.create({
   },
   dayCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
@@ -562,10 +539,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 12,
     marginBottom: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F3F4F6',
   },
   dayHeaderLeft: {
     flexDirection: 'row',
@@ -573,7 +550,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dayDate: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -582,75 +559,48 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#10B981',
   },
-  ordersContainer: {
-    gap: 12,
+  dayOrders: {
+    gap: 8,
   },
-  orderRow: {
+  orderItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
-  orderLeft: {
+  orderInfo: {
     flex: 1,
     gap: 4,
   },
-  orderId: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  orderCustomerRow: {
+  orderCustomer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   orderCustomerName: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   walkInBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+    borderRadius: 4,
   },
-  walkInText: {
+  walkInBadgeText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#F59E0B',
+    color: '#1E40AF',
   },
-  orderRight: {
-    alignItems: 'flex-end',
-    gap: 4,
+  orderId: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   orderAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#10B981',
-  },
-  paymentTypeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  paymentTypeBadgeCash: {
-    backgroundColor: '#D1FAE5',
-  },
-  paymentTypeBadgeMonthly: {
-    backgroundColor: '#DBEAFE',
-  },
-  paymentTypeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  paymentTypeTextCash: {
-    color: '#10B981',
-  },
-  paymentTypeTextMonthly: {
-    color: '#3B82F6',
+    color: '#1F2937',
   },
   emptyState: {
     backgroundColor: '#fff',
@@ -659,15 +609,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
     marginTop: 16,
+    marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
     color: '#6B7280',
-    marginTop: 8,
     textAlign: 'center',
   },
   bottomPadding: {
