@@ -4,6 +4,8 @@ import { Clock, RefreshCw } from 'lucide-react-native';
 import { OrderStatusCard } from '../../components/OrderStatusCard';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatCurrency } from '../../utils/currency';
+
 
 export default function OrdersScreen() {
   const { state, fetchOrdersFromSupabase } = useApp();

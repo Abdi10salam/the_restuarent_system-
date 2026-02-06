@@ -1,0 +1,43 @@
+[33mbd9aa46[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfix-ui[m[33m)[m HEAD@{0}: reset: moving to HEAD~1
+[33m09170ab[m[33m ([m[1;31morigin/fix-ui[m[33m)[m HEAD@{1}: reset: moving to HEAD~1
+[33md23be91[m HEAD@{2}: commit: added HR screens quick swappable action and rank base on orders
+[33m09170ab[m[33m ([m[1;31morigin/fix-ui[m[33m)[m HEAD@{3}: checkout: moving from cool-dashboard to fix-ui
+[33m7866da4[m[33m ([m[1;31morigin/cool-dashboard[m[33m, [m[1;32mcool-dashboard[m[33m)[m HEAD@{4}: reset: moving to HEAD
+[33m7866da4[m[33m ([m[1;31morigin/cool-dashboard[m[33m, [m[1;32mcool-dashboard[m[33m)[m HEAD@{5}: commit: impelimented clean dashboard with real data synchronized
+[33m61e61ba[m HEAD@{6}: commit: Implement clean dashboard with synchronized real data
+[33m8d4f490[m[33m ([m[1;31morigin/receipt[m[33m, [m[1;32mreceipt[m[33m)[m HEAD@{7}: checkout: moving from receipt to cool-dashboard
+[33m8d4f490[m[33m ([m[1;31morigin/receipt[m[33m, [m[1;32mreceipt[m[33m)[m HEAD@{8}: checkout: moving from reciept to receipt
+[33m1798e92[m[33m ([m[1;31morigin/fix-staff-numbering[m[33m, [m[1;32mreciept[m[33m, [m[1;32mfix-staff-numbering[m[33m)[m HEAD@{9}: reset: moving to HEAD
+[33m1798e92[m[33m ([m[1;31morigin/fix-staff-numbering[m[33m, [m[1;32mreciept[m[33m, [m[1;32mfix-staff-numbering[m[33m)[m HEAD@{10}: checkout: moving from reciept to reciept
+[33m1798e92[m[33m ([m[1;31morigin/fix-staff-numbering[m[33m, [m[1;32mreciept[m[33m, [m[1;32mfix-staff-numbering[m[33m)[m HEAD@{11}: checkout: moving from fix-staff-numbering to reciept
+[33m1798e92[m[33m ([m[1;31morigin/fix-staff-numbering[m[33m, [m[1;32mreciept[m[33m, [m[1;32mfix-staff-numbering[m[33m)[m HEAD@{12}: pull origin: Fast-forward
+[33m23aa0a4[m HEAD@{13}: checkout: moving from fix-ui to fix-staff-numbering
+[33m09170ab[m[33m ([m[1;31morigin/fix-ui[m[33m)[m HEAD@{14}: commit: forgot to commit this before implemented scrollable screen,
+[33mbd9aa46[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfix-ui[m[33m)[m HEAD@{15}: checkout: moving from fix-ui to fix-ui
+[33mbd9aa46[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfix-ui[m[33m)[m HEAD@{16}: commit: implemented scrollable screen,
+[33me4b31f0[m[33m ([m[1;32mpdfDownloadHR[m[33m)[m HEAD@{17}: reset: moving to e4b31f009764d6ad75b6bf185cb12451b6851c64
+[33ma8937af[m HEAD@{18}: commit: add scrollable login and port,forgot password
+[33me4b31f0[m[33m ([m[1;32mpdfDownloadHR[m[33m)[m HEAD@{19}: reset: moving to e4b31f009764d6ad75b6bf185cb12451b6851c64
+[33mcdc4cf4[m HEAD@{20}: commit: add scrollable login and port,forgot password
+[33me4b31f0[m[33m ([m[1;32mpdfDownloadHR[m[33m)[m HEAD@{21}: checkout: moving from pdfDownloadHR to fix-ui
+[33me4b31f0[m[33m ([m[1;32mpdfDownloadHR[m[33m)[m HEAD@{22}: pull origin main: Merge made by the 'ort' strategy.
+[33m76d1bf9[m HEAD@{23}: reset: moving to 76d1bf93be1279ecc80f74f09ddee4054e64901e
+[33m5e75bcf[m[33m ([m[1;31morigin/pdfDownloadHR[m[33m)[m HEAD@{24}: reset: moving to 5e75bcfe8fcf2a66bc06b68d65981f69e8fb4b57
+[33m77117ac[m HEAD@{25}: commit: improved ui with keyboard not to hide when typing PLUS scroablle
+[33m5e75bcf[m[33m ([m[1;31morigin/pdfDownloadHR[m[33m)[m HEAD@{26}: commit: improved ui with keyboard not to hide when typing PLUS scroablle
+[33m76d1bf9[m HEAD@{27}: commit: improved ui with keyboard not to hide when typing PLUS scroablle
+[33mc88ebd2[m HEAD@{28}: commit: forgot to commit after adding register customer to navigation menu
+[33m493402d[m HEAD@{29}: commit (merge): added buttions along side the navigation menu and interactive calendar
+[33mabeabd7[m HEAD@{30}: reset: moving to HEAD
+[33mabeabd7[m HEAD@{31}: reset: moving to HEAD
+[33mabeabd7[m HEAD@{32}: rebase (abort): returning to refs/heads/pdfDownloadHR
+[33m18a4368[m HEAD@{33}: pull origin pdfDownloadHR --rebase (start): checkout 18a43686a5084f9627d22367d15d55930b0f8eb2
+[33mabeabd7[m HEAD@{34}: checkout: moving from pdfDownloadHR to pdfDownloadHR
+[33mabeabd7[m HEAD@{35}: commit: moved buttions from fake header to navigation menu interactive calendar
+[33mf65d4f0[m HEAD@{36}: checkout: moving from main to pdfDownloadHR
+[33me649b54[m[33m ([m[1;32mmain[m[33m)[m HEAD@{37}: reset: moving to e649b540c3dc45de6a00e890d033d2e7c0e9229f
+[33m62970ef[m HEAD@{38}: checkout: moving from pdfDownloadHR to main
+[33mf65d4f0[m HEAD@{39}: checkout: moving from main to pdfDownloadHR
+[33m62970ef[m HEAD@{40}: commit: moved buttions from fake header to navigation menu
+[33me649b54[m[33m ([m[1;32mmain[m[33m)[m HEAD@{41}: pull origin main: Fast-forward
+[33me8fc9c0[m HEAD@{42}: clone: from https://github.com/Abdi10salam/the_restuarent_system-.git
