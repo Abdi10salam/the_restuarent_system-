@@ -1,8 +1,9 @@
-// app/(admin)/orders.tsx - COMPLETE VERSION WITH RECEIPT
+// app/(admin)/orders.tsx - 
 
 import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Clock, CircleCheck as CheckCircle, Circle as XCircle, RefreshCw } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext'; // 🆕 NEW
 import { formatCurrency } from '../../utils/currency';
@@ -108,9 +109,9 @@ export default function AdminOrdersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={{ padding: 24 }}>
-        <View>
-          <Text style={{ fontWeight: 'bold' }}>
+      <View style={styles.topSummary}>
+        <View style={styles.statsCard}>
+          <Text style={styles.statsText}>
             {pendingOrders.length} pending • {completedOrders.length} completed
           </Text>
         </View>
@@ -154,9 +155,17 @@ export default function AdminOrdersScreen() {
                     })}
                   </Text>
                   
-                  <Text style={styles.paymentType}>
-                    Payment: {order.paymentType === 'cash' ? 'Cash' : 'Monthly Billing'}
-                  </Text>
+                  <View style={[
+                    styles.paymentPill,
+                    order.paymentType === 'cash' ? styles.paymentCash : styles.paymentMonthly
+                  ]}>
+                    <Text style={[
+                      styles.paymentPillText,
+                      order.paymentType === 'cash' ? styles.paymentCashText : styles.paymentMonthlyText
+                    ]}>
+                      {order.paymentType === 'cash' ? 'Cash Payment' : 'Monthly Billing'}
+                    </Text>
+                  </View>
 
                   <View style={styles.items}>
                     {order.items.map((item, index) => (
@@ -196,10 +205,15 @@ export default function AdminOrdersScreen() {
                       {processingOrderId === order.id ? (
                         <ActivityIndicator color="#fff" size="small" />
                       ) : (
-                        <>
+                        <LinearGradient
+                          colors={['#3B5D4F', '#2F4A3F']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.approveGradient}
+                        >
                           <CheckCircle size={18} color="#fff" strokeWidth={2} />
                           <Text style={styles.approveButtonText}>Approve</Text>
-                        </>
+                        </LinearGradient>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -273,7 +287,7 @@ export default function AdminOrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F3EE',
   },
   refreshButton: {
     backgroundColor: '#D1FAE5',
@@ -282,6 +296,7 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 15,
   },
   loadingContainer: {
     flex: 1,
@@ -297,7 +312,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 16,
+    paddingTop: 8,
+  },
+  topSummary: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  statsCard: {
+    backgroundColor: '#F3EFE9',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignSelf: 'flex-start',
+    minWidth: 21,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  statsText: {
+    fontWeight: '700',
+    color: '#3B5D4F',
   },
   section: {
     marginBottom: 24,
@@ -364,15 +401,28 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 8,
   },
-  paymentType: {
-    fontSize: 12,
-    color: '#6B7280',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  paymentPill: {
     alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
     marginBottom: 12,
+  },
+  paymentPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  paymentCash: {
+    backgroundColor: '#E6F1EC',
+  },
+  paymentCashText: {
+    color: '#3B5D4F',
+  },
+  paymentMonthly: {
+    backgroundColor: '#FFF3E0',
+  },
+  paymentMonthlyText: {
+    color: '#D97706',
   },
   items: {
     marginBottom: 16,
@@ -393,12 +443,15 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     flex: 1,
-    backgroundColor: '#10B981',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  approveGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 14,
     gap: 6,
   },
   approveButtonText: {
@@ -408,13 +461,14 @@ const styles = StyleSheet.create({
   },
   rejectButton: {
     flex: 1,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#F87171',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 14,
     gap: 6,
+    opacity: 0.9,
   },
   rejectButtonText: {
     color: '#fff',
