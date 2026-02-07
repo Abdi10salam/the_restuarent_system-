@@ -31,6 +31,7 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [customerExists, setCustomerExists] = useState<boolean | null>(null);
   const [isFirstLogin, setIsFirstLogin] = useState<boolean>(false);
+  const Wrapper = Platform.OS === "web" ? View : TouchableWithoutFeedback;
 
   const isCustomer = portal === 'customer';
   const portalColor = isCustomer ? '#F97316' : '#10B981';
@@ -284,7 +285,7 @@ const handleLogin = async () => {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <Wrapper  onPress={Keyboard.dismiss}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView style={{ flex: 1 }}>
           <View style={styles.container}>
@@ -389,7 +390,7 @@ const handleLogin = async () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </TouchableWithoutFeedback>
+    </Wrapper >
   );
 }
 

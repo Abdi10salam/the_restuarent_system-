@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Clock, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react-native';
 import { Order } from '../types';
+import { formatCurrency } from './../utils/currency';
 
 interface OrderStatusCardProps {
   order: Order;
@@ -82,7 +83,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.total}>Total: ${order.totalAmount.toFixed(2)}</Text>
+        <Text style={styles.total}>{formatCurrency(order.totalAmount)}</Text>
       </View>
     </View>
   );

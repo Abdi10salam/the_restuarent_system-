@@ -1,8 +1,8 @@
-// app/(admin)/hr.tsx - WITH ADMIN CREATION
+// app/(admin)/hr.tsx - WITH FILTERS AND SORTING
 
-import React, { useState, useLayoutEffect } from 'react';
+import React, { useState, useLayoutEffect, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, ActivityIndicator, Image } from 'react-native';
-import { UserCog, DollarSign, Receipt, Plus, Mail, User, X, Phone, Camera, Upload, Briefcase, Shield } from 'lucide-react-native';
+import { UserCog, Award ,ShoppingCart , Receipt, Plus, Mail, User, X, Phone, Camera, Upload, Briefcase, Shield, Users } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
@@ -10,10 +10,15 @@ import { Customer } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { uploadProfileImage } from './../lib/supabase';
 
+type FilterType = 'all' | 'staff' | 'admins' | 'best';
+
 export default function HRManagementScreen() {
   const navigation = useNavigation();
   const { state, addCustomerToSupabase } = useApp();
   const { customers, orders } = state;
+
+  // 🆕 NEW: Filter state
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   const staffMembers = customers.filter(c => c.role === 'receptionist');
   const adminMembers = customers.filter(c => c.role === 'admin' || c.role === 'master_admin');
@@ -32,16 +37,82 @@ export default function HRManagementScreen() {
   // Set header right button
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ alignItems: 'center', maxWidth: 200 }}>
+          <Text
+            style={styles.sectionSubtitle}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {staffMembers.length} staff • {adminMembers.length} admin{adminMembers.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      ),
       headerRight: () => (
         <TouchableOpacity
           style={styles.headerButton}
           onPress={() => setShowAddModal(true)}
         >
-          <Plus size={24} color="#ffff" strokeWidth={2} />
+          <Plus size={24} color="#fff" strokeWidth={2} />
         </TouchableOpacity>
       ),
     });
   }, [navigation]);
+
+
+
+  const getStaffStats = (staffId: string) => {
+    const staffOrders = orders.filter(order => order.placedBy === staffId);
+    return {
+      totalOrders: staffOrders.length,
+      pendingOrders: staffOrders.filter(o => o.status === 'pending').length,
+      walkInOrders: staffOrders.filter(o => o.isWalkIn).length,
+      customerOrders: staffOrders.filter(o => !o.isWalkIn).length,
+      approvedOrders: staffOrders.filter(o => o.status === 'approved').length,
+      revenue: staffOrders
+        .filter(o => o.status === 'approved')
+        .reduce((sum, o) => sum + o.totalAmount, 0),
+    };
+  };
+
+  // 🆕 NEW: Sorted staff and admins by total orders (highest first)
+  const sortedStaffMembers = useMemo(() => {
+    return [...staffMembers].sort((a, b) => {
+      const statsA = getStaffStats(a.id);
+      const statsB = getStaffStats(b.id);
+      return statsB.totalOrders - statsA.totalOrders; // Descending order
+    });
+  }, [staffMembers, orders]);
+
+  const sortedAdminMembers = useMemo(() => {
+    return [...adminMembers].sort((a, b) => {
+      const statsA = getStaffStats(a.id);
+      const statsB = getStaffStats(b.id);
+      return statsB.totalOrders - statsA.totalOrders; // Descending order
+    });
+  }, [adminMembers, orders]);
+
+// 🆕 NEW: Determine what to show based on filter
+  const showAdmins = activeFilter === 'all' || activeFilter === 'admins';
+  const showStaff = activeFilter === 'all' || activeFilter === 'staff';
+
+// 🆕 NEW: Best Staff filter - combine and get top performers
+  const bestPerformers = useMemo(() => {
+    if (activeFilter !== 'best') return [];
+
+    // Combine staff and admins
+    const allMembers = [...staffMembers, ...adminMembers];
+
+    // Sort by total orders and get top performers with at least 1 order
+    return allMembers
+      .map(member => ({
+        member,
+        stats: getStaffStats(member.id)
+      }))
+      .filter(item => item.stats.totalOrders > 0) // Only those with orders
+      .sort((a, b) => b.stats.totalOrders - a.stats.totalOrders) // Highest first
+      .slice(0, 1); // Top 5 performers
+  }, [activeFilter, staffMembers, adminMembers, orders]);
 
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -205,20 +276,6 @@ export default function HRManagementScreen() {
     }
   };
 
-  const getStaffStats = (staffId: string) => {
-    const staffOrders = orders.filter(order => order.placedBy === staffId);
-    return {
-      totalOrders: staffOrders.length,
-      pendingOrders: staffOrders.filter(o => o.status === 'pending').length,
-      walkInOrders: staffOrders.filter(o => o.isWalkIn).length,
-      customerOrders: staffOrders.filter(o => !o.isWalkIn).length,
-      approvedOrders: staffOrders.filter(o => o.status === 'approved').length,
-      revenue: staffOrders
-        .filter(o => o.status === 'approved')
-        .reduce((sum, o) => sum + o.totalAmount, 0),
-    };
-  };
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -226,74 +283,197 @@ export default function HRManagementScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>HR Management</Text>
-          <Text style={styles.sectionSubtitle}>
-            {staffMembers.length} staff • {adminMembers.length} admin{adminMembers.length !== 1 ? 's' : ''}
-          </Text>
+
+
+        {/* 🆕 NEW: Filter Buttons */}
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'all' && styles.filterButtonActive
+            ]}
+            onPress={() => setActiveFilter('all')}
+            activeOpacity={0.8}
+          >
+            <Users
+              size={18}
+              color={activeFilter === 'all' ? '#fff' : '#6B7280'}
+              strokeWidth={2}
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activeFilter === 'all' && styles.filterButtonTextActive
+            ]}>
+              All
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'staff' && styles.filterButtonActive
+            ]}
+            onPress={() => setActiveFilter('staff')}
+            activeOpacity={0.8}
+          >
+            <UserCog
+              size={18}
+              color={activeFilter === 'staff' ? '#fff' : '#F97316'}
+              strokeWidth={2}
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activeFilter === 'staff' && styles.filterButtonTextActive
+            ]}>Staff
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'admins' && styles.filterButtonActive
+            ]}
+            onPress={() => setActiveFilter('admins')}
+            activeOpacity={0.8}
+          >
+            <Shield
+              size={18}
+              color={activeFilter === 'admins' ? '#fff' : '#10B981'}
+              strokeWidth={2}
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activeFilter === 'admins' && styles.filterButtonTextActive
+            ]}>Admins
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'best' && styles.filterButtonActive
+            ]}
+            onPress={() => setActiveFilter('best')}
+            activeOpacity={0.8}
+          >
+            <Award
+              size={18}
+              color={activeFilter === 'best' ? '#fff' : '#F59E0B'}
+              strokeWidth={2}
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activeFilter === 'best' && styles.filterButtonTextActive
+            ]}>
+              Best Staff
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* ADMINS SECTION */}
-        {adminMembers.length > 0 && (
+        {showAdmins && sortedAdminMembers.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
               <Shield size={20} color="#10B981" strokeWidth={2} />
-              <Text style={styles.sectionHeaderText}>Administrators</Text>
+              <Text style={styles.sectionHeaderText}>
+                Administrators {activeFilter !== 'all' && `(${sortedAdminMembers.length})`}
+              </Text>
             </View>
 
-            {adminMembers.map((admin) => (
-              <TouchableOpacity
-                key={admin.id}
-                style={[styles.staffCard, styles.adminCard]}
-                activeOpacity={0.7}
-              >
-                <View style={styles.staffHeader}>
-                  <View style={styles.staffMainInfo}>
-                    {admin.profilePhoto ? (
-                      <Image
-                        source={{ uri: admin.profilePhoto }}
-                        style={styles.profilePhoto}
-                      />
-                    ) : (
-                      <View style={[styles.profilePhotoPlaceholder, styles.adminPhotoPlaceholder]}>
-                        <Shield size={28} color="#10B981" strokeWidth={2} />
-                      </View>
-                    )}
+            {sortedAdminMembers.map((admin, index) => {
+              const stats = getStaffStats(admin.id);
 
-                    <View style={styles.staffInfo}>
-                      <View style={styles.nameRow}>
-                        <Text style={styles.staffName}>{admin.name}</Text>
-                        <View style={[styles.staffBadge, styles.adminBadge]}>
-                          <Shield size={10} color="#fff" strokeWidth={2} />
-                          <Text style={styles.staffBadgeText}>
-                            {admin.role === 'master_admin' ? 'Master Admin' : 'Admin'}
-                          </Text>
+              return (
+                <TouchableOpacity
+                  key={admin.id}
+                  style={[styles.staffCard, styles.adminCard]}
+                  activeOpacity={0.7}
+                >
+                  {/* 🆕 NEW: Rank badge */}
+                  {stats.totalOrders > 0 && (
+                    <View style={[]}>
+                      <Text style={styles.rankText}></Text>
+                    </View>
+                  )}
+
+                  <View style={styles.staffHeader}>
+                    <View style={styles.staffMainInfo}>
+                      {admin.profilePhoto ? (
+                        <Image
+                          source={{ uri: admin.profilePhoto }}
+                          style={styles.profilePhoto}
+                        />
+                      ) : (
+                        <View style={[styles.profilePhotoPlaceholder, styles.adminPhotoPlaceholder]}>
+                          <Shield size={28} color="#10B981" strokeWidth={2} />
                         </View>
+                      )}
+
+                      <View style={styles.staffInfo}>
+                        <View style={styles.nameRow}>
+                          <Text style={styles.staffName}>{admin.name}</Text>
+                          <View style={[styles.staffBadge, styles.adminBadge]}>
+                            <Shield size={10} color="#fff" strokeWidth={2} />
+                            <Text style={styles.staffBadgeText}>
+                              {admin.role === 'master_admin' ? 'Master Admin' : 'Admin'}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.staffEmail}>📧 {admin.email}</Text>
+                        {admin.phone && (
+                          <Text style={styles.staffPhone}>📱 {admin.phone}</Text>
+                        )}
+                        {admin.isFirstLogin && (
+                          <Text style={styles.firstLoginBadge}>First Login Pending</Text>
+                        )}
                       </View>
-                      <Text style={styles.staffEmail}>📧 {admin.email}</Text>
-                      {admin.phone && (
-                        <Text style={styles.staffPhone}>📱 {admin.phone}</Text>
-                      )}
-                      {admin.isFirstLogin && (
-                        <Text style={styles.firstLoginBadge}>First Login Pending</Text>
-                      )}
+                    </View>
+
+                    <View style={styles.staffStats}>
+                      <View style={styles.statItem}>
+                        <ShoppingCart size={16} color="#10B981" strokeWidth={2} />
+                        <Text style={styles.statText}>{stats.totalOrders}</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+
+                  {/* Show performance only if they have orders */}
+                  {stats.totalOrders > 0 && (
+                    <View style={styles.performanceSection}>
+                      <View style={styles.performanceItem}>
+                        <Text style={styles.performanceLabel}>Walk-in</Text>
+                        <Text style={styles.performanceValue}>{stats.walkInOrders}</Text>
+                      </View>
+                      <View style={styles.performanceItem}>
+                        <Text style={styles.performanceLabel}>Customer</Text>
+                        <Text style={styles.performanceValue}>{stats.customerOrders}</Text>
+                      </View>
+                      <View style={styles.performanceItem}>
+                        <Text style={styles.performanceLabel}>Pending</Text>
+                        <Text style={[styles.performanceValue, { color: '#F59E0B' }]}>{stats.pendingOrders}</Text>
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </>
         )}
 
         {/* STAFF SECTION */}
-        {staffMembers.length > 0 && (
+        {showStaff && sortedStaffMembers.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
               <UserCog size={20} color="#F97316" strokeWidth={2} />
-              <Text style={styles.sectionHeaderText}>Receptionists</Text>
+              <Text style={styles.sectionHeaderText}>
+                Receptionists {activeFilter !== 'all' && `(${sortedStaffMembers.length})`}
+              </Text>
             </View>
 
-            {staffMembers.map((staff) => {
+            {sortedStaffMembers.map((staff, index) => {
               const stats = getStaffStats(staff.id);
 
               return (
@@ -302,6 +482,11 @@ export default function HRManagementScreen() {
                   style={styles.staffCard}
                   activeOpacity={0.7}
                 >
+                  {/* 🆕 NEW: Rank badge */}
+                  {stats.totalOrders > 0 && (
+                    <View ></View>
+                  )}
+
                   <View style={styles.staffHeader}>
                     <View style={styles.staffMainInfo}>
                       {staff.profilePhoto ? (
@@ -335,11 +520,11 @@ export default function HRManagementScreen() {
 
                     <View style={styles.staffStats}>
                       <View style={styles.statItem}>
-                        <Receipt size={16} color="#10B981" strokeWidth={2} />
+                        <ShoppingCart size={16} color="#10B981" strokeWidth={2} />
                         <Text style={styles.statText}>{stats.totalOrders}</Text>
                       </View>
                       <View style={styles.statItem}>
-                        <DollarSign size={16} color="#F97316" strokeWidth={2} />
+
                         <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
                       </View>
                     </View>
@@ -365,11 +550,132 @@ export default function HRManagementScreen() {
           </>
         )}
 
-        {staffMembers.length === 0 && adminMembers.length === 1 && (
+        {/* BEST STAFF SECTION */}
+        {activeFilter === 'best' && bestPerformers.length > 0 && (
+          <>
+
+
+            {bestPerformers.map((item, index) => {
+              const { member, stats } = item;
+              const isAdmin = member.role === 'admin' || member.role === 'master_admin';
+
+              return (
+                <TouchableOpacity
+                  key={member.id}
+                  style={[
+                    styles.staffCard,
+                    isAdmin ? styles.adminCard : {},
+                    index === 0 && styles.topPerformerCard
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  {/* 🏆 Trophy for #1, medals for others */}
+                  <View style={styles.staffHeader}>
+                    <View style={styles.staffMainInfo}>
+                      {member.profilePhoto ? (
+                        <Image
+                          source={{ uri: member.profilePhoto }}
+                          style={styles.profilePhoto}
+                        />
+                      ) : (
+                        <View style={[
+                          styles.profilePhotoPlaceholder,
+                          isAdmin && styles.adminPhotoPlaceholder
+                        ]}>
+                          {isAdmin ? (
+                            <Shield size={28} color="#10B981" strokeWidth={2} />
+                          ) : (
+                            <UserCog size={28} color="#F97316" strokeWidth={2} />
+                          )}
+                        </View>
+                      )}
+
+                      <View style={styles.staffInfo}>
+                        <View style={styles.nameRow}>
+                          <Text style={styles.staffName}>{member.name}</Text>
+                          <View style={[
+                            styles.staffBadge,
+                            isAdmin && styles.adminBadge
+                          ]}>
+                            {isAdmin ? (
+                              <>
+                                <Shield size={10} color="#fff" strokeWidth={2} />
+                                <Text style={styles.staffBadgeText}>
+                                  {member.role === 'master_admin' ? 'Master Admin' : 'Admin'}
+                                </Text>
+                              </>
+                            ) : (
+                              <>
+                                <Briefcase size={10} color="#fff" strokeWidth={2} />
+                                <Text style={styles.staffBadgeText}>Staff</Text>
+                              </>
+                            )}
+                          </View>
+                        </View>
+                        <Text style={styles.staffEmail}>📧 {member.email}</Text>
+                        {member.phone && (
+                          <Text style={styles.staffPhone}>📱 {member.phone}</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.staffStats}>
+                      <View style={styles.statItem}>
+                        <Receipt size={16} color="#10B981" strokeWidth={2} />
+                        <Text style={styles.statText}>{stats.totalOrders}</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.performanceSection}>
+                    <View style={styles.performanceItem}>
+                      <Text style={styles.performanceLabel}>Walk-in Orders</Text>
+                      <Text style={styles.performanceValue}>{stats.walkInOrders}</Text>
+                    </View>
+                    <View style={styles.performanceItem}>
+                      <Text style={styles.performanceLabel}>Customer Orders</Text>
+                      <Text style={styles.performanceValue}>{stats.customerOrders}</Text>
+                    </View>
+                    <View style={styles.performanceItem}>
+                      <Text style={styles.performanceLabel}>Pending</Text>
+                      <Text style={[styles.performanceValue, { color: '#F59E0B' }]}>{stats.pendingOrders}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
+
+        {/* Empty State */}
+        {((activeFilter === 'all' && staffMembers.length === 0 && adminMembers.length <= 1) ||
+          (activeFilter === 'staff' && staffMembers.length === 0) ||
+          (activeFilter === 'admins' && adminMembers.length === 0)) && (
           <View style={styles.emptyState}>
-            <UserCog size={64} color="#D1D5DB" strokeWidth={1} />
-            <Text style={styles.emptyText}>No staff members yet</Text>
-            <Text style={styles.emptySubtext}>Add your first staff member or admin to get started</Text>
+            {activeFilter === 'staff' ? (
+              <UserCog size={64} color="#D1D5DB" strokeWidth={1} />
+            ) : activeFilter === 'admins' ? (
+              <Shield size={64} color="#D1D5DB" strokeWidth={1} />
+            ) : (
+              <Users size={64} color="#D1D5DB" strokeWidth={1} />
+            )}
+            <Text style={styles.emptyText}>
+              {activeFilter === 'staff'
+                ? 'No staff members yet'
+                : activeFilter === 'admins'
+                  ? 'No administrators yet'
+                  : 'No team members yet'}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {activeFilter === 'staff'
+                ? 'Add your first staff member to get started'
+                : activeFilter === 'admins'
+                  ? 'Add an administrator to get started'
+                  : 'Add your first team member to get started'}
+            </Text>
           </View>
         )}
 
@@ -410,10 +716,10 @@ export default function HRManagementScreen() {
                     onPress={() => setNewStaff(prev => ({ ...prev, role: 'receptionist' }))}
                     disabled={isSubmitting}
                   >
-                    <UserCog 
-                      size={20} 
-                      color={newStaff.role === 'receptionist' ? '#fff' : '#F97316'} 
-                      strokeWidth={2} 
+                    <UserCog
+                      size={20}
+                      color={newStaff.role === 'receptionist' ? '#fff' : '#F97316'}
+                      strokeWidth={2}
                     />
                     <Text style={[
                       styles.roleButtonText,
@@ -431,10 +737,10 @@ export default function HRManagementScreen() {
                     onPress={() => setNewStaff(prev => ({ ...prev, role: 'admin' }))}
                     disabled={isSubmitting}
                   >
-                    <Shield 
-                      size={20} 
-                      color={newStaff.role === 'admin' ? '#fff' : '#10B981'} 
-                      strokeWidth={2} 
+                    <Shield
+                      size={20}
+                      color={newStaff.role === 'admin' ? '#fff' : '#10B981'}
+                      strokeWidth={2}
                     />
                     <Text style={[
                       styles.roleButtonText,
@@ -572,7 +878,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   infoSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 24,
@@ -581,8 +887,49 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionSubtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#6B7280',
+    fontWeight: 'bold',
+
+  },
+  // 🆕 NEW: Filter buttons styles
+  filterContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  filterButtonActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.2,
+    elevation: 4,
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -608,9 +955,20 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderLeftWidth: 4,
     borderLeftColor: '#F97316',
+    position: 'relative', // For rank badge positioning
   },
   adminCard: {
     borderLeftColor: '#10B981',
+  },
+  // 🆕 NEW: Rank badge styles
+  adminRankBadge: {
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+  },
+  rankText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   staffHeader: {
     flexDirection: 'row',
@@ -934,5 +1292,45 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  // 🆕 NEW: Best Staff styles
+  bestStaffHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    marginTop: 8,
+    backgroundColor: '#FFFBEB',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  bestStaffHeaderText: {
+    flex: 1,
+  },
+  bestStaffSubtext: {
+    fontSize: 13,
+    color: '#92400E',
+    marginTop: 2,
+  },
+  topPerformerCard: {
+    borderLeftWidth: 6,
+    borderLeftColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOpacity: 0.2,
+    elevation: 5,
+  },
+  goldBadge: {
+    backgroundColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+  },
+  silverBadge: {
+    backgroundColor: '#9CA3AF',
+    shadowColor: '#9CA3AF',
+  },
+  bronzeBadge: {
+    backgroundColor: '#D97706',
+    shadowColor: '#D97706',
   },
 });
