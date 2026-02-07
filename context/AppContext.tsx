@@ -278,7 +278,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // 🆕 REAL-TIME SUBSCRIPTIONS FOR LIVE DASHBOARD UPDATES
   useEffect(() => {
-    console.log('🔴 Setting up real-time subscriptions...');
 
     // Subscribe to orders table changes
     const ordersSubscription = supabase

@@ -10,11 +10,13 @@ import { formatCurrency } from '../../utils/currency';
 import { useNavigation } from '@react-navigation/native';
 import { ReceiptModal } from '../../components/ReceiptModal'; // 🆕 NEW
 
+
 export default function AdminOrdersScreen() {
   const { state, updateOrderStatusInSupabase, fetchOrdersFromSupabase } = useApp();
   const { state: authState } = useAuth(); // 🆕 NEW
   const { orders, isLoading } = state;
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
   
   // 🆕 NEW: Receipt modal states
   const [showReceiptModal, setShowReceiptModal] = useState(false);
