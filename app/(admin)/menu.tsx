@@ -1,4 +1,4 @@
-// app/(admin)/menu-management.tsx - WITH STOCK MANAGEMENT
+// app/(admin)/menu-management.tsx 
 import React, { useState, useMemo,useLayoutEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Modal, Image, ActivityIndicator } from 'react-native';
 import { Plus, Edit, Trash2, Save, X, Upload, Camera, Package } from 'lucide-react-native';
@@ -9,6 +9,7 @@ import { uploadDishImage, deleteDishImage } from './../lib/supabase';
 import { Dish } from '../../types';
 import { formatCurrency, parseCurrencyInput } from '../../utils/currency';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 
 export default function AdminMenuScreen() {
@@ -329,10 +330,11 @@ export default function AdminMenuScreen() {
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#10B981" />
+          <ActivityIndicator size="large" color="#3B5D4F" />
         </View>
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.dishesGrid}>
           {filteredDishes.map((dish) => {
             // 🆕 Check stock status
             const isOutOfStock = dish.stockQuantity !== null && dish.stockQuantity !== undefined && dish.stockQuantity === 0;
@@ -340,7 +342,8 @@ export default function AdminMenuScreen() {
 
             return (
               <View key={dish.id} style={styles.dishCard}>
-                <Image source={{ uri: dish.image }} style={styles.dishImage} />
+                <View style={styles.dishImageContainer}>
+                  <Image source={{ uri: dish.image }} style={styles.dishImage} resizeMode="cover" />
                 
                 {/* 🆕 Stock Badge */}
                 {dish.stockQuantity !== null && dish.stockQuantity !== undefined && (
@@ -355,29 +358,25 @@ export default function AdminMenuScreen() {
                     </Text>
                   </View>
                 )}
-
+                </View>
                 <View style={styles.dishContent}>
-                  <View style={styles.dishHeader}>
-                    <View style={styles.dishInfo}>
-                      <Text style={styles.dishName}>{dish.name}</Text>
-                      <Text style={styles.dishCategory}>{dish.category}</Text>
-                    </View>
-                    <Text style={styles.dishPrice}>{formatCurrency(dish.price)}</Text>
-                  </View>
+                  <Text style={styles.dishName} numberOfLines={1}>{dish.name}</Text>
+                  <Text style={styles.dishCategory}>{dish.category}</Text>
+                  <Text style={styles.dishPrice}>{formatCurrency(dish.price)}</Text>
                   
-                  <Text style={styles.dishDescription}>{dish.description}</Text>
+                  <Text style={styles.dishDescription} numberOfLines={2}>{dish.description}</Text>
                   
                   <View style={styles.dishActions}>
                     <TouchableOpacity
-                      style={[
-                        styles.availabilityButton,
-                        { backgroundColor: dish.available ? '#D1FAE5' : '#FEE2E2' }
-                      ]}
-                      onPress={() => toggleAvailability(dish.id, !dish.available)}
-                    >
+                        style={[
+                          styles.availabilityButton,
+                          { backgroundColor: dish.available ? '#E6F1EC' : '#FDE8E8' }
+                        ]}
+                        onPress={() => toggleAvailability(dish.id, !dish.available)}
+                      >
                       <Text style={[
                         styles.availabilityText,
-                        { color: dish.available ? '#10B981' : '#EF4444' }
+                        { color: dish.available ? '#3B5D4F' : '#EF4444' }
                       ]}>
                         {dish.available ? 'Available' : 'Unavailable'}
                       </Text>
@@ -397,6 +396,7 @@ export default function AdminMenuScreen() {
               </View>
             );
           })}
+          </View>
 
           {filteredDishes.length === 0 && (
             <View style={styles.emptyState}>
@@ -412,12 +412,17 @@ export default function AdminMenuScreen() {
       <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+            <LinearGradient
+              colors={['#eddcdc', '#2F4A3F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.modalHeader}
+            >
               <Text style={styles.modalTitle}>{editingDish ? 'Edit Dish' : 'Add New Dish'}</Text>
-              <TouchableOpacity onPress={closeModal}>
-                <X size={24} color="#6B7280" strokeWidth={2} />
+              <TouchableOpacity onPress={closeModal} style={styles.modalCloseButton}>
+                <X size={22} color="#fff" strokeWidth={2} />
               </TouchableOpacity>
-            </View>
+            </LinearGradient>
             
             <ScrollView style={styles.modalForm}>
               {dishForm.image ? (
@@ -436,10 +441,10 @@ export default function AdminMenuScreen() {
               ) : (
                 <TouchableOpacity style={styles.uploadButton} onPress={showImageOptions} disabled={isUploadingImage || isSubmitting}>
                   {isUploadingImage ? (
-                    <ActivityIndicator color="#10B981" size="large" />
+                    <ActivityIndicator color="#3B5D4F" size="large" />
                   ) : (
                     <>
-                      <Camera size={32} color="#10B981" strokeWidth={2} />
+                      <Camera size={32} color="#3B5D4F" strokeWidth={2} />
                       <Text style={styles.uploadButtonText}>Add Dish Image</Text>
                     </>
                   )}
@@ -583,13 +588,14 @@ export default function AdminMenuScreen() {
 
 const styles = StyleSheet.create({
   headerButton: {
-    backgroundColor: '#10B981',
-    padding: 10,
+    backgroundColor: '#3B5D4F',
+    padding: 12,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#F7F3EE' },
   header: {
     backgroundColor: '#fff',
     padding: 24,
@@ -603,7 +609,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
   subtitle: { fontSize: 16, color: '#6B7280' },
   addButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     borderRadius: 24,
     width: 48,
     height: 48,
@@ -612,25 +618,36 @@ const styles = StyleSheet.create({
   },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1 },
-  scrollContent: { paddingTop: 16 },
+  scrollContent: { paddingTop: 12, paddingBottom: 24 },
+  dishesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 14,
+    gap: 12,
+  },
   dishCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    width: '48%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
     overflow: 'hidden',
     position: 'relative',
   },
-  dishImage: { width: '100%', height: 120 },
+  dishImageContainer: {
+    width: '100%',
+    aspectRatio: 1.2,
+    backgroundColor: '#E5E7EB',
+    position: 'relative',
+  },
+  dishImage: { width: '100%', height: '100%' },
   stockBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 10,
+    left: 10,
     backgroundColor: '#10B981',
     flexDirection: 'row',
     alignItems: 'center',
@@ -642,36 +659,26 @@ const styles = StyleSheet.create({
   outOfStockBadge: { backgroundColor: '#EF4444' },
   lowStockBadge: { backgroundColor: '#F59E0B' },
   stockBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-  dishContent: { padding: 16 },
-  dishHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  dishInfo: { flex: 1 },
-  dishName: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
+  dishContent: { padding: 12 },
+  dishName: { fontSize: 16, fontWeight: '700', color: '#1F2937', marginBottom: 2 },
   dishCategory: {
     fontSize: 12,
     color: '#6B7280',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+    fontStyle: 'italic',
+    marginBottom: 6,
   },
-  dishPrice: { fontSize: 18, fontWeight: 'bold', color: '#F97316' },
-  dishDescription: { fontSize: 14, color: '#6B7280', marginBottom: 16, lineHeight: 20 },
+  dishPrice: { fontSize: 18, fontWeight: '700', color: '#D97706', marginBottom: 8 },
+  dishDescription: { fontSize: 12, color: '#6B7280', marginBottom: 12, lineHeight: 16 },
   dishActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  availabilityButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  availabilityText: { fontSize: 12, fontWeight: 'bold' },
+  availabilityButton: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  availabilityText: { fontSize: 11, fontWeight: 'bold' },
   actionButtons: { flexDirection: 'row', gap: 8 },
-  editButton: { backgroundColor: '#FEF3E2', borderRadius: 8, padding: 8 },
-  deleteButton: { backgroundColor: '#FEE2E2', borderRadius: 8, padding: 8 },
+  editButton: { backgroundColor: '#FEF3E2', borderRadius: 10, padding: 8 },
+  deleteButton: { backgroundColor: '#FEE2E2', borderRadius: 10, padding: 8 },
   emptyState: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -689,9 +696,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: '#F7F3EE',
+    borderRadius: 18,
+    padding: 20,
     width: '100%',
     maxWidth: 400,
     maxHeight: '90%',
@@ -700,21 +707,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginBottom: 16,
   },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalForm: { maxHeight: 500, marginBottom: 24 },
   uploadButton: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F3EE',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: '#3B5D4F',
     borderStyle: 'dashed',
     padding: 32,
     alignItems: 'center',
     marginBottom: 16,
   },
-  uploadButtonText: { fontSize: 16, fontWeight: 'bold', color: '#10B981', marginTop: 12 },
+  uploadButtonText: { fontSize: 16, fontWeight: 'bold', color: '#3B5D4F', marginTop: 12 },
   imagePreviewContainer: { marginBottom: 16, position: 'relative' },
   imagePreview: {
     width: '100%',
@@ -735,7 +753,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   changeImageButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -745,7 +763,7 @@ const styles = StyleSheet.create({
   },
   changeImageText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   textInput: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F3EE',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -767,18 +785,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  selectedCategory: { backgroundColor: '#10B981', borderColor: '#10B981' },
+  selectedCategory: { backgroundColor: '#3B5D4F', borderColor: '#3B5D4F' },
   categoryButtonText: { fontSize: 14, fontWeight: 'bold', color: '#6B7280' },
   selectedCategoryText: { color: '#fff' },
   
   // 🆕 NEW: Stock Management Styles
   stockContainer: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#F3EFE9',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#D9D2C7',
   },
   stockHeader: {
     flexDirection: 'row',
@@ -798,11 +816,11 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: '#3B5D4F',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkboxActive: { backgroundColor: '#10B981' },
+  checkboxActive: { backgroundColor: '#3B5D4F' },
   checkmark: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   stockToggleText: { fontSize: 14, color: '#1F2937', flex: 1 },
   stockInputContainer: { marginTop: 8 },
@@ -812,14 +830,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#3B5D4F',
     fontSize: 16,
     color: '#1F2937',
     marginBottom: 8,
   },
   stockHelper: {
     fontSize: 12,
-    color: '#059669',
+    color: '#3B5D4F',
     lineHeight: 18,
   },
   
@@ -835,7 +853,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     alignItems: 'center',
   },
-  selectedAvailability: { backgroundColor: '#10B981', borderColor: '#10B981' },
+  selectedAvailability: { backgroundColor: '#3B5D4F', borderColor: '#3B5D4F' },
   selectedUnavailability: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
   availabilityToggleText: { fontSize: 14, fontWeight: 'bold', color: '#6B7280' },
   selectedAvailabilityText: { color: '#fff' },
@@ -857,7 +875,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     gap: 6,
   },
   saveButtonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },

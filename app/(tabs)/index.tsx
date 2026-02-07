@@ -1,597 +1,563 @@
-// app/(tabs)/index.tsx - COMPLETE VERSION WITH RECEIPT
+// app/(tabs)/index.tsx - REDESIGNED CUSTOMER MENU
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert } from "react-native"
-import { Plus, ShoppingCart, CheckCircle, ArrowLeft, User } from "lucide-react-native"
-import { CategoryFilter } from "../../components/CategoryFilter"
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, TextInput } from "react-native"
+import { Plus, ShoppingCart, Search, Flame, Star } from "lucide-react-native"
+import { LinearGradient } from "expo-linear-gradient"
 import { useApp } from "../../context/AppContext"
 import { useAuth } from "../../context/AuthContext"
-import { useRouter, useLocalSearchParams } from "expo-router"
-import { LinearGradient } from "expo-linear-gradient"
+import { useRouter } from "expo-router"
 import { formatCurrency } from "../../utils/currency"
-import { WALK_IN_CUSTOMER_ID, ensureWalkInCustomerExists } from "../lib/walkin-customer"
-import { ReceiptModal } from "../../components/ReceiptModal" // 🆕 NEW
+import { calculateDishPerformance, getTrendingUpDishes } from "../../utils/dish-analytics"
+import type { Dish } from "../../types" // Import the Dish type
 
-export default function MenuScreen() {
+export default function CustomerMenuScreen() {
   const router = useRouter()
-  const params = useLocalSearchParams()
-  const { state: appState, dispatch, placeOrderToSupabase } = useApp()
+  const { state: appState, dispatch } = useApp()
   const { state: authState } = useAuth()
-  const { dishes, cart } = appState
+  const { dishes, cart, orders } = appState
+  const currentUser = authState.currentUser
   
-  const [selectedCategory, setSelectedCategory] = useState("All")
+  const [selectedCategory, setSelectedCategory] = useState("Popular")
+  const [searchQuery, setSearchQuery] = useState("")
   const [addedDishId, setAddedDishId] = useState<string | null>(null)
-  const [receptionistCart, setReceptionistCart] = useState<any[]>([])
-  
-  // 🆕 NEW: Receipt modal states
-  const [showReceiptModal, setShowReceiptModal] = useState(false)
-  const [completedOrder, setCompletedOrder] = useState<any | null>(null)
 
-  const isReceptionist = authState.currentUser?.role === 'receptionist'
-  
-  const orderType = params.orderType as string
-  const customerId = params.customerId as string
-  const customerName = params.customerName as string
-  const customerEmail = params.customerEmail as string
-  const customerNumber = params.customerNumber as string
-  const paymentType = params.paymentType as 'cash' | 'monthly'
+  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  const isWalkIn = orderType === 'walk-in'
-  const isForCustomer = orderType === 'for-customer'
-  const isReceptionistOrder = isReceptionist && (isWalkIn || isForCustomer)
+  const performance = useMemo(() => {
+    return calculateDishPerformance(orders, dishes, 'month');
+  }, [orders, dishes]);
 
-  const activeCart = isReceptionistOrder ? receptionistCart : cart
-  const cartItemCount = activeCart.reduce((sum, item) => sum + item.quantity, 0)
+  const ratingByDishId = useMemo(() => {
+    const map = new Map<string, number>();
+    performance.forEach(p => map.set(p.dishId, p.averageRating));
+    return map;
+  }, [performance]);
 
-  useEffect(() => {
-    console.log('🔍 Menu Screen Context:');
-    console.log('- Is Receptionist:', isReceptionist);
-    console.log('- Order Type:', orderType);
-    console.log('- Customer ID:', customerId);
-    console.log('- Customer Name:', customerName);
-    console.log('- Is Walk-in:', isWalkIn);
-    console.log('- Is For Customer:', isForCustomer);
-  }, [orderType, customerId, customerName]);
+  // Get popular dishes (most ordered)
+  const popularDishes = useMemo(() => {
+    return getTrendingUpDishes(performance, 10)
+      .filter(p => p.isAvailable)
+      .map(p => dishes.find(d => d.id === p.dishId))
+      .filter((dish): dish is Dish => dish !== undefined); // Filter out undefined and assert type
+  }, [performance, dishes]);
+
+  // Category icons and filters (meal types)
+  const categories = [
+    { id: "Popular", label: "Popular", icon: require("../../assets/images/filename..png"), color: "#3B5D4F" },
+    { id: "Breakfast", label: "Breakfast", icon: require("../../assets/images/coffee-cup.png"), color: "#E5E7EB" },
+    { id: "Lunch", label: "Lunch", icon: require("../../assets/images/lunch.png"), color: "#E5E7EB" },
+    { id: "Dinner", label: "Dinner", icon: require("../../assets/images/dinner.png"), color: "#E5E7EB" },
+    { id: "Supper", label: "Supper", icon: require("../../assets/images/supper.png"), color: "#E5E7EB" },
+    { id: "Juices", label: "Juices", icon: require("../../assets/images/juices.png"), color: "#E5E7EB" },
+  ];
+
+  // Filter dishes based on category and search
+  const filteredDishes = useMemo(() => {
+    let result = dishes.filter(dish => dish.available);
+
+    // Apply category filter
+    if (selectedCategory === "Popular") {
+      result = popularDishes.length > 0 ? popularDishes : result.slice(0, 8);
+    } else if (selectedCategory === "Breakfast" || 
+               selectedCategory === "Lunch" || 
+               selectedCategory === "Dinner" || 
+               selectedCategory === "Supper" ||
+               selectedCategory === "Juices") {
+      // Filter by actual dish category
+      result = result.filter(dish => dish.category === selectedCategory);
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      result = result.filter(dish => 
+        dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dish.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dish.category.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    return result;
+  }, [selectedCategory, searchQuery, dishes, popularDishes]);
 
   const handleAddToCart = (dish: any) => {
-    if (isReceptionistOrder) {
-      const existingItem = receptionistCart.find(item => item.dish.id === dish.id);
-      if (existingItem) {
-        setReceptionistCart(receptionistCart.map(item =>
-          item.dish.id === dish.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        ));
-      } else {
-        setReceptionistCart([...receptionistCart, { dish, quantity: 1 }]);
-      }
-    } else {
-      dispatch({ type: "ADD_TO_CART", dish })
-    }
-
-    setAddedDishId(dish.id)
-    setTimeout(() => setAddedDishId(null), 1000)
-  }
+    dispatch({ type: "ADD_TO_CART", dish });
+    setAddedDishId(dish.id);
+    setTimeout(() => setAddedDishId(null), 1000);
+  };
 
   const handleViewCart = () => {
-    if (isReceptionistOrder) {
-      if (receptionistCart.length === 0) {
-        Alert.alert('Empty Cart', 'Please add items before proceeding to checkout');
-        return;
-      }
-      
-      Alert.alert(
-        'Confirm Order',
-        `Place order for ${isWalkIn ? 'walk-in customer' : customerName}?\n\n✅ Order will be approved immediately.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Place Order',
-            onPress: handlePlaceReceptionistOrder
-          }
-        ]
-      );
-    } else {
-      router.push("/(tabs)/cart")
-    }
-  }
-
-  // 🆕 UPDATED: Show receipt modal after order placement
-  const handlePlaceReceptionistOrder = async () => {
-    if (receptionistCart.length === 0) return;
-
-    const totalAmount = receptionistCart.reduce(
-      (sum, item) => sum + item.dish.price * item.quantity,
-      0
-    );
-
-    const WALK_IN_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001';
-
-    const order: any = {
-      id: Date.now().toString(),
-      customerId: isWalkIn ? WALK_IN_CUSTOMER_ID : customerId,
-      customerName: isWalkIn ? `Walk-in #${Date.now().toString().slice(-4)}` : customerName,
-      customerEmail: isWalkIn ? 'walk-in@restaurant.local' : customerEmail,
-      items: receptionistCart,
-      totalAmount,
-      status: 'approved',
-      paymentType: isWalkIn ? 'cash' : paymentType,
-      createdAt: new Date().toISOString(),
-      approvedAt: new Date().toISOString(),
-      placedBy: authState.currentUser?.id,
-      placedByName: authState.currentUser?.name,
-      isWalkIn: isWalkIn,
-    };
-
-    try {
-      await placeOrderToSupabase(order);
-      
-      // 🆕 NEW: Show receipt modal immediately
-      setCompletedOrder(order);
-      setReceptionistCart([]);
-      setShowReceiptModal(true);
-
-    } catch (error) {
-      console.error('Order placement error:', error);
-      Alert.alert('Error', 'Failed to place order. Please try again.');
-    }
+    router.push("/(tabs)/cart");
   };
 
-  // 🆕 NEW: Close receipt and return to dashboard
-  const handleCloseReceipt = () => {
-    setShowReceiptModal(false);
-    setCompletedOrder(null);
-    router.push('/(tabs)/reception-dashboard');
-  };
-
-  const handleBack = () => {
-    if (isReceptionistOrder) {
-      if (receptionistCart.length > 0) {
-        Alert.alert(
-          'Discard Order?',
-          'Items in cart will be lost',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Discard',
-              style: 'destructive',
-              onPress: () => {
-                setReceptionistCart([]);
-                router.back();
-              }
-            }
-          ]
-        );
-      } else {
-        router.back();
-      }
-    }
-  };
-
-  const categories = useMemo(() => {
-    const availableDishes = dishes.filter((dish) => dish.available)
-    const uniqueCategories = [...new Set(availableDishes.map((dish) => dish.category))]
-    return uniqueCategories.sort()
-  }, [dishes])
-
-  const filteredDishes = useMemo(() => {
-    const availableDishes = dishes.filter((dish) => dish.available)
-    if (selectedCategory === "All") {
-      return availableDishes
-    }
-    return availableDishes.filter((dish) => dish.category === selectedCategory)
-  }, [selectedCategory, dishes])
+  // Get first name
+  const firstName = currentUser?.name?.split(' ')[0] || 'Friend';
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={isReceptionistOrder ? ["#10B981", "#059669", "#047857"] : ["#F97316", "#FB923C", "#FDBA74"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            {isReceptionistOrder && (
-              <TouchableOpacity 
-                style={styles.backButton} 
-                onPress={handleBack}
-                activeOpacity={0.8}
-              >
-                <ArrowLeft size={24} color="#fff" strokeWidth={2.5} />
-              </TouchableOpacity>
-            )}
-            
-            <View>
-              <Text style={styles.title}>
-                {isWalkIn ? 'Walk-in Order' : isForCustomer ? 'Customer Order' : 'Our Menu'}
-              </Text>
-              <Text style={styles.subtitle}>
-                {isWalkIn 
-                  ? 'Quick checkout for walk-in customer' 
-                  : isForCustomer 
-                    ? `Placing order for ${customerName} (#${customerNumber})`
-                    : 'Delicious dishes made with love'
-                }
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.cartButton, isReceptionistOrder && styles.cartButtonReceptionist]} 
-            activeOpacity={0.8} 
-            onPress={handleViewCart}
-          >
-            <ShoppingCart 
-              size={24} 
-              color={isReceptionistOrder ? "#10B981" : "#F97316"} 
-              strokeWidth={2.5} 
-            />
-            {cartItemCount > 0 && (
-              <View style={[styles.cartBadge, isReceptionistOrder && styles.cartBadgeReceptionist]}>
-                <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <CategoryFilter
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
-      />
-
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {filteredDishes.map((dish) => {
-          const isAdded = addedDishId === dish.id
-
-          return (
-            <View key={dish.id} style={styles.dishCard}>
-              <LinearGradient
-                colors={["rgba(255, 255, 255, 0.9)", "rgba(255, 255, 255, 0.7)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.glassCard}
-              >
-                <View style={styles.imageContainer}>
-                  <Image source={{ uri: dish.image }} style={styles.dishImage} />
-                  <LinearGradient colors={["transparent", "rgba(0,0,0,0.4)"]} style={styles.imageGradient} />
-
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryBadgeText}>{dish.category}</Text>
-                  </View>
-
-                  <View style={styles.availabilityBadge}>
-                    <CheckCircle size={14} color="#10B981" strokeWidth={2.5} />
-                    <Text style={styles.availabilityText}>Available</Text>
-                  </View>
+        {/* Header with Profile */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity 
+              style={styles.profilePicContainer}
+              onPress={() => router.push("/(tabs)/profile")}
+              activeOpacity={0.8}
+            >
+              {currentUser?.profilePhoto ? (
+                <Image 
+                  source={{ uri: currentUser.profilePhoto }} 
+                  style={styles.profilePic}
+                />
+              ) : (
+                <View style={styles.profilePicPlaceholder}>
+                  <Text style={styles.profileInitial}>
+                    {firstName.charAt(0).toUpperCase()}
+                  </Text>
                 </View>
-
-                <View style={styles.dishContent}>
-                  <View style={styles.dishHeader}>
-                    <View style={styles.dishInfo}>
-                      <Text style={styles.dishName}>{dish.name}</Text>
-                      <Text style={styles.dishDescription} numberOfLines={2}>
-                        {dish.description}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.dishFooter}>
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.priceLabel}>PRICE</Text>
-                      <Text style={styles.dishPrice}>{formatCurrency(dish.price)}</Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={[styles.addButton, isAdded && styles.addButtonSuccess]}
-                      onPress={() => handleAddToCart(dish)}
-                      activeOpacity={0.8}
-                    >
-                      <LinearGradient
-                        colors={isAdded ? ["#10B981", "#059669"] : 
-                                isReceptionistOrder ? ["#10B981", "#059669"] : ["#F97316", "#EA580C"]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.addButtonGradient}
-                      >
-                        <Plus size={22} color="#fff" strokeWidth={3} />
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </LinearGradient>
+              )}
+            </TouchableOpacity>
+            
+            <View>
+              <Text style={styles.greeting}>Hi {firstName}!</Text>
+              <Text style={styles.tagline}>
+                We're always in the mood{'\n'}for <Text style={styles.taglineHighlight}>good food</Text>
+              </Text>
             </View>
-          )
-        })}
+          </View>
 
+          <TouchableOpacity 
+            style={styles.cartButton} 
+            onPress={handleViewCart}
+            activeOpacity={0.8}
+          >
+            <ShoppingCart size={24} color="#6B7280" strokeWidth={2} />
+            {cartItemCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Search size={20} color="#9CA3AF" strokeWidth={2} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search dishes and categories"
+            placeholderTextColor="#9CA3AF"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        {/* Categories */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesScroll}
+        >
+          {categories.map((category) => {
+            const isSelected = selectedCategory === category.id;
+            
+            return (
+              <TouchableOpacity
+                key={category.id}
+                style={styles.categoryItem}
+                onPress={() => setSelectedCategory(category.id)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.categoryCircle,
+                    { backgroundColor: isSelected ? category.color : '#F3F4F6' }
+                  ]}
+                >
+                  {typeof category.icon === "number" ? (
+                    <Image
+                      source={category.icon}
+                      style={styles.categoryImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <category.icon 
+                      size={28} 
+                      color={isSelected ? "#fff" : "#6B7280"} 
+                      strokeWidth={2}
+                    />
+                  )}
+                </View>
+                <Text 
+                  style={[
+                    styles.categoryLabel,
+                    isSelected && styles.categoryLabelActive
+                  ]}
+                >
+                  {category.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Section Title */}
+        <Text style={styles.sectionTitle}>
+          {selectedCategory === "Popular" ? "Popular Dishes" : 
+           selectedCategory === "Breakfast" ? "Breakfast Menu" :
+           selectedCategory === "Lunch" ? "Lunch Menu" :
+           selectedCategory === "Dinner" ? "Dinner Menu" :
+           selectedCategory === "Supper" ? "Supper Menu" :
+           selectedCategory === "Juices" ? "Juices Menu" : "Our Menu"}
+        </Text>
+
+        {/* Dishes Grid */}
+        <View style={styles.dishesGrid}>
+          {filteredDishes.map((dish) => {
+            const isAdded = addedDishId === dish.id;
+            const rating = ratingByDishId.get(dish.id) ?? 0;
+            
+            return (
+              <TouchableOpacity
+                key={dish.id}
+                style={styles.dishCard}
+                onPress={() => handleAddToCart(dish)}
+                activeOpacity={0.9}
+              >
+                {/* Dish Image */}
+                <View style={styles.dishImageContainer}>
+                  <Image 
+                    source={{ uri: dish.image }} 
+                    style={styles.dishImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.ratingBadge}>
+                    <Star size={14} color="#D97706" fill="#D97706" strokeWidth={1} />
+                    <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+                  </View>
+                  
+                  {/* Add Button Overlay */}
+                  <LinearGradient
+                    colors={isAdded ? ["#D97706", "#B45309"] : ["#8acc81", "#2F4A3F"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.addButtonOverlay}
+                  >
+                    <Plus size={20} color="#fff" strokeWidth={3} />
+                  </LinearGradient>
+                </View>
+
+                {/* Dish Info */}
+                <View style={styles.dishInfo}>
+                  <Text style={styles.dishName} numberOfLines={1}>
+                    {dish.name}
+                  </Text>
+                  <Text style={styles.dishCategory}>{dish.category}</Text>
+                  <Text style={styles.dishPrice}>{formatCurrency(dish.price)}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Empty State */}
         {filteredDishes.length === 0 && (
           <View style={styles.emptyState}>
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No dishes available</Text>
-              <Text style={styles.emptySubtext}>Check back later for new items</Text>
-            </View>
+            <Image
+              source={require("../../assets/images/no_dish.png")}
+              style={styles.emptyIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.emptyText}>No dishes found</Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery ? "Try a different search" : "Check back later for new items"}
+            </Text>
           </View>
         )}
 
         <View style={styles.bottomPadding} />
       </ScrollView>
-
-      {/* 🆕 NEW: Receipt Modal */}
-      <ReceiptModal
-        visible={showReceiptModal}
-        order={completedOrder}
-        servedBy={authState.currentUser?.name || 'Staff'}
-        onClose={handleCloseReceipt}
-      />
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FEF3E2",
+    backgroundColor: "#F7F3EE",
   },
-  header: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    shadowColor: "#F97316",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
   },
-  headerContent: {
+  
+  // HEADER
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
     gap: 12,
+    flex: 1,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#fff",
-    marginBottom: 4,
-    letterSpacing: -0.5,
-    textShadowColor: "rgba(0, 0, 0, 0.1)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.95)",
-    fontWeight: "500",
-  },
-  cartButton: {
-    backgroundColor: "#fff",
+  profilePicContainer: {
     width: 56,
     height: 56,
     borderRadius: 28,
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "#3B5D4F",
+  },
+  profilePic: {
+    width: "100%",
+    height: "100%",
+  },
+  profilePicPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#3B5D4F",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#F97316",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    position: "relative",
   },
-  cartButtonReceptionist: {
-    shadowColor: "#10B981",
+  profileInitial: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  greeting: {
+    fontSize: 16,
+    color: "#9CA3AF",
+    marginBottom: 4,
+  },
+  tagline: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#1F2937",
+    lineHeight: 28,
+  },
+  taglineHighlight: {
+    color: "#D97706",
+  },
+  cartButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    position: "relative",
   },
   cartBadge: {
     position: "absolute",
     top: -4,
     right: -4,
     backgroundColor: "#EF4444",
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 6,
-    borderWidth: 3,
-    borderColor: "#fff",
-  },
-  cartBadgeReceptionist: {
-    backgroundColor: "#10B981",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: "#F7F3EE",
   },
   cartBadgeText: {
     color: "#fff",
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "bold",
   },
-  scrollView: {
-    flex: 1,
+
+  // SEARCH
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    marginHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginBottom: 24,
+    gap: 12,
   },
-  scrollContent: {
-    padding: 16,
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#1F2937",
+  },
+
+  // CATEGORIES
+  categoriesScroll: {
+    paddingHorizontal: 20,
+    gap: 20,
+    marginBottom: 24,
+  },
+  categoryItem: {
+    width: 72,
+    alignItems: "center",
+  },
+  categoryCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 8,
+  },
+  categoryImage: {
+    width: 36,
+    height: 36,
+  },
+  categoryLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  categoryLabelActive: {
+    color: "#1F2937",
+    fontWeight: "700",
+  },
+
+  // SECTION TITLE
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1F2937",
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+
+  // DISHES GRID
+  dishesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 14,
+    gap: 12,
   },
   dishCard: {
-    marginBottom: 20,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  glassCard: {
-    borderRadius: 24,
+    width: "48%",
+    backgroundColor: "#f0f0f0",
+    borderRadius: 20,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.8)",
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  imageContainer: {
-    position: "relative",
+  dishImageContainer: {
     width: "100%",
-    height: 200,
+    aspectRatio: 1.2,
+    backgroundColor: "#E5E7EB",
+    position: "relative",
   },
   dishImage: {
     width: "100%",
     height: "100%",
+    backgroundColor: "#E5E7EB",
   },
-  imageGradient: {
+  addButtonOverlay: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-  },
-  categoryBadge: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    backgroundColor: "rgba(249, 115, 22, 0.95)",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    bottom: 12,
+    right: 12,
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#3B5D4F",
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 4,
   },
-  categoryBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  availabilityBadge: {
+  ratingBadge: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
     elevation: 3,
   },
-  availabilityText: {
-    color: "#10B981",
+  ratingText: {
     fontSize: 12,
     fontWeight: "700",
-  },
-  dishContent: {
-    padding: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-  },
-  dishHeader: {
-    marginBottom: 16,
+    color: "#1F2937",
   },
   dishInfo: {
-    flex: 1,
+    padding: 12,
   },
   dishName: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#1F2937",
-    marginBottom: 6,
-    letterSpacing: -0.5,
-  },
-  dishDescription: {
-    fontSize: 15,
-    color: "#6B7280",
-    lineHeight: 22,
-  },
-  dishFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  priceContainer: {
-    flex: 1,
-  },
-  priceLabel: {
-    fontSize: 11,
-    color: "#9CA3AF",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  dishPrice: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#F97316",
-    letterSpacing: -1,
-  },
-  addButton: {
-    borderRadius: 18,
-    overflow: "hidden",
-    shadowColor: "#F97316",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  addButtonSuccess: {
-    shadowColor: "#10B981",
-  },
-  addButtonGradient: {
-    width: 60,
-    height: 60,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 48,
-  },
-  emptyCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
-    borderRadius: 20,
-    padding: 32,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.9)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-  },
-  emptyText: {
     fontSize: 18,
     fontWeight: "700",
     color: "#1F2937",
+    marginBottom: 2,
+  },
+  dishCategory: {
+    fontSize: 12,
+    fontStyle: "italic",
+    color: "#6B7280",
+    marginBottom: 10,
+  },
+  dishPrice: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#D97706",
+  },
+
+  // EMPTY STATE
+  emptyState: {
+    paddingVertical: 48,
+    alignItems: "center",
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    marginBottom: 12,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#9CA3AF",
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#D1D5DB",
   },
+
   bottomPadding: {
-    height: 20,
+    height: 32,
   },
-})
+});

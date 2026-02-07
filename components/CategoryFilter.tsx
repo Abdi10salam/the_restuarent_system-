@@ -30,7 +30,7 @@ export function CategoryFilter({ categories, selectedCategory, onSelectCategory 
             >
               {isSelected ? (
                 <LinearGradient
-                  colors={['#F97316', '#EA580C']}
+                  colors={['#3B5D4F', '#2F4A3F']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.selectedGradient}
@@ -52,10 +52,10 @@ export function CategoryFilter({ categories, selectedCategory, onSelectCategory 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FEF3E2',
+    backgroundColor: '#F7F3EE',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(249, 115, 22, 0.1)',
+    borderBottomColor: 'rgba(59, 93, 79, 0.12)',
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -68,12 +68,12 @@ const styles = StyleSheet.create({
   selectedGradient: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    shadowColor: '#F97316',
+    shadowColor: '#3B5D4F',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
-     borderRadius: 24,
-    elevation: 6,
+    borderRadius: 24,
+    elevation: 5,
   },
   selectedText: {
     color: '#fff',
@@ -84,13 +84,13 @@ const styles = StyleSheet.create({
   unselectedButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: 'rgba(249, 115, 22, 0.2)',
+    borderColor: 'rgba(59, 93, 79, 0.2)',
   },
   unselectedText: {
-    color: '#F97316',
+    color: '#3B5D4F',
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.3,

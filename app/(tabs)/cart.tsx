@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { ShoppingBag, CreditCard, Calendar } from 'lucide-react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Image } from 'react-native';
+import { CreditCard, Calendar } from 'lucide-react-native';
 import { CartItem } from '../../components/CartItem';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -82,7 +82,11 @@ export default function CartScreen() {
         </View>
         
         <View style={styles.emptyContainer}>
-          <ShoppingBag size={64} color="#D1D5DB" strokeWidth={1} />
+          <Image
+            source={require("../../assets/images/no_dish.png")}
+            style={styles.emptyIcon}
+            resizeMode="contain"
+          />
           <Text style={styles.emptyText}>Your cart is empty</Text>
           <Text style={styles.emptySubtext}>Browse our menu to add delicious dishes</Text>
         </View>
@@ -114,7 +118,10 @@ export default function CartScreen() {
 
       <View style={styles.footer}>
         <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Total Amount</Text>
+          <View>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalHint}>Taxes included</Text>
+          </View>
           <Text style={styles.totalAmount}>{formatCurrency(totalAmount)}</Text>
         </View>
         
@@ -140,10 +147,10 @@ export default function CartScreen() {
             disabled={isPlacingOrder}
           >
             {isPlacingOrder ? (
-              <ActivityIndicator color="#10B981" size="small" />
+              <ActivityIndicator color="#3B5D4F" size="small" />
             ) : (
               <>
-                <Calendar size={20} color="#10B981" strokeWidth={2} />
+                <Calendar size={20} color="#3B5D4F" strokeWidth={2} />
                 <Text style={styles.monthlyButtonText}>Monthly Bill</Text>
               </>
             )}
@@ -157,17 +164,15 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F3EE',
   },
   header: {
-    backgroundColor: '#fff',
     padding: 24,
     paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingBottom: 16,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 4,
@@ -180,7 +185,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 200,
   },
   emptyContainer: {
@@ -188,6 +193,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+  },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    marginBottom: 12,
   },
   emptyText: {
     fontSize: 20,
@@ -207,9 +217,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    padding: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
+    padding: 20,
     paddingBottom: 34,
   },
   totalContainer: {
@@ -223,10 +238,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
+  totalHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
   totalAmount: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#F97316',
+    color: '#D97706',
   },
   paymentButtons: {
     flexDirection: 'row',
@@ -238,11 +258,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     gap: 8,
   },
   cashButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: '#3B5D4F',
   },
   cashButtonText: {
     color: '#fff',
@@ -252,10 +272,10 @@ const styles = StyleSheet.create({
   monthlyButton: {
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: '#3B5D4F',
   },
   monthlyButtonText: {
-    color: '#10B981',
+    color: '#3B5D4F',
     fontSize: 16,
     fontWeight: 'bold',
   },
