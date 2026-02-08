@@ -177,7 +177,7 @@ export default function MonthlyBillsScreen() {
           style={styles.headerCalendarButton}
           onPress={() => setShowCalendarModal(true)}
         >
-          <Calendar size={16} color="#F97316" strokeWidth={2} />
+          <Calendar size={16} color="#D97706" strokeWidth={2} />
           <Text style={styles.headerDateText} numberOfLines={1}>
             {getDateDisplayText()}
           </Text>
@@ -308,35 +308,35 @@ export default function MonthlyBillsScreen() {
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             @page { margin: 20mm; }
-            body { font-family: 'Helvetica', 'Arial', sans-serif; color: #1F2937; line-height: 1.6; font-size: 12pt; }
+            body { font-family: 'Helvetica', 'Arial', sans-serif; color: #1F2937; line-height: 1.5; font-size: 11pt; background: #F7F3EE; }
             
-            .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 4px solid #F97316; }
-            .restaurant-name { font-size: 32pt; font-weight: 700; color: #1F2937; margin-bottom: 8px; letter-spacing: 0.5px; }
-            .report-title { font-size: 16pt; color: #6B7280; margin-bottom: 12px; font-weight: 500; }
-            .report-meta { font-size: 10pt; color: #9CA3AF; display: flex; justify-content: center; gap: 20px; }
-            .report-meta span { padding: 4px 12px; background: #F3F4F6; border-radius: 4px; }
+            .header { text-align: center; margin-bottom: 26px; padding: 18px 16px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E5E7EB; box-shadow: 0 6px 18px rgba(17, 24, 39, 0.08); }
+            .restaurant-name { font-size: 30pt; font-weight: 700; color: #1F2937; margin-bottom: 6px; letter-spacing: 0.5px; }
+            .report-title { font-size: 14pt; color: #6B7280; margin-bottom: 10px; font-weight: 500; }
+            .report-meta { font-size: 10pt; color: #9CA3AF; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+            .report-meta span { padding: 6px 12px; background: #F3EFE9; border-radius: 999px; border: 1px solid #E5E7EB; }
             
-            .customer-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
-            .customer-table thead { background: linear-gradient(to bottom, #F97316, #EA580C); color: white; }
-            .customer-table th { padding: 12px 16px; text-align: left; font-size: 10pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+            .customer-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 8px 22px rgba(17, 24, 39, 0.06); }
+            .customer-table thead { background: linear-gradient(135deg, #3B5D4F, #2F4A3F); color: white; }
+            .customer-table th { padding: 10px 12px; text-align: left; font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
             .customer-table th:first-child { width: 40px; text-align: center; }
-            .customer-table th:last-child { text-align: right; width: 140px; }
+            .customer-table th:last-child { text-align: right; width: 160px; }
             .customer-table tbody tr { border-bottom: 1px solid #E5E7EB; }
-            .customer-table tbody tr:nth-child(even) { background: #F9FAFB; }
-            .customer-table td { padding: 14px 16px; font-size: 10pt; vertical-align: top; }
-            .customer-table td:first-child { text-align: center; font-weight: 600; color: #6B7280; font-size: 11pt; }
-            .customer-table td:last-child { text-align: right; font-weight: 700; color: #F97316; font-size: 12pt; }
+            .customer-table tbody tr:nth-child(even) { background: #F7F6F3; }
+            .customer-table td { padding: 10px 12px; font-size: 9.5pt; vertical-align: top; }
+            .customer-table td:first-child { text-align: center; font-weight: 600; color: #6B7280; font-size: 10pt; }
+            .customer-table td:last-child { text-align: right; font-weight: 700; color: #D97706; font-size: 11pt; }
             
-            .customer-name { font-size: 11pt; font-weight: 600; color: #1F2937; margin-bottom: 4px; }
-            .customer-contact { font-size: 9pt; color: #6B7280; line-height: 1.6; margin-bottom: 2px; }
-            .customer-badge { display: inline-block; background: #F97316; color: white; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 600; margin-top: 4px; }
+            .customer-name { font-size: 10.5pt; font-weight: 700; color: #1F2937; margin-bottom: 2px; }
+            .customer-contact { font-size: 8.5pt; color: #6B7280; line-height: 1.4; margin-bottom: 2px; }
+            .customer-badge { display: inline-block; background: #D97706; color: white; padding: 2px 6px; border-radius: 6px; font-size: 7.5pt; font-weight: 600; margin-top: 3px; }
             
-            .total-row { background: linear-gradient(to bottom, #FEF3E2, #FED7AA) !important; border-top: 3px solid #F97316 !important; }
-            .total-row td { padding: 16px !important; font-weight: 700 !important; }
-            .total-label { text-align: right !important; font-size: 12pt !important; text-transform: uppercase; letter-spacing: 1px; color: #1F2937 !important; }
-            .total-amount { font-size: 18pt !important; color: #000000 !important; }
+            .total-row { background: linear-gradient(135deg, #F3EFE9, #EADFD2) !important; border-top: 3px solid #3B5D4F !important; }
+            .total-row td { padding: 12px !important; font-weight: 700 !important; }
+            .total-label { text-align: right !important; font-size: 11pt !important; text-transform: uppercase; letter-spacing: 0.8px; color: #1F2937 !important; }
+            .total-amount { font-size: 16pt !important; color: #3B5D4F !important; }
             
-            .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #E5E7EB; text-align: center; }
+            .footer { margin-top: 30px; padding-top: 16px; border-top: 2px solid #E5E7EB; text-align: center; }
             .footer-text { font-size: 9pt; color: #6B7280; line-height: 1.8; margin-bottom: 4px; }
             .footer-text.primary { font-weight: 600; color: #1F2937; }
           </style>
@@ -488,7 +488,7 @@ export default function MonthlyBillsScreen() {
         {/* Summary Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Receipt size={24} color="#0EA5E9" strokeWidth={2} />
+            <Receipt size={24} color="#3B5D4F" strokeWidth={2} />
             <View style={styles.statInfo}>
               <Text style={styles.statValue}>{filteredCustomers.length}</Text>
               <Text style={styles.statLabel}>Customers</Text>
@@ -496,7 +496,7 @@ export default function MonthlyBillsScreen() {
           </View>
 
           <View style={styles.statCard}>
-            <DollarSign size={24} color="#0284C7" strokeWidth={2} />
+            <DollarSign size={24} color="#3B5D4F" strokeWidth={2} />
             <View style={styles.statInfo}>
               <Text style={styles.statValue}>{formatCurrency(totalOutstanding)}</Text>
               <Text style={styles.statLabel}>Outstanding</Text>
@@ -541,7 +541,7 @@ export default function MonthlyBillsScreen() {
                 </>
               ) : (
                 <>
-                  <CheckCircle size={64} color="#0EA5E9" strokeWidth={1} />
+                  <CheckCircle size={64} color="#3B5D4F" strokeWidth={1} />
                   <Text style={styles.emptyText}>All Clear!</Text>
                   <Text style={styles.emptySubtext}>No outstanding balances</Text>
                 </>
@@ -786,10 +786,11 @@ export default function MonthlyBillsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F3EE',
   },
   scrollContent: {
     paddingTop: 16,
+    paddingBottom: 30,
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -841,7 +842,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
     borderLeftWidth: 3,
-    borderLeftColor: '#0EA5E9',
+    borderLeftColor: '#3B5D4F',
   },
   statInfo: {
     marginLeft: 12,
@@ -860,14 +861,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pdfButton: {
-    backgroundColor: '#0EA5E9',
+    backgroundColor: '#3B5D4F',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
-    shadowColor: '#0EA5E9',
+    shadowColor: '#3B5D4F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -921,7 +922,7 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   customerNumberBadge: {
-    backgroundColor: '#F97316',
+    backgroundColor: '#D97706',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -949,7 +950,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   balanceSection: {
-    backgroundColor: '#FEF3E2',
+    backgroundColor: '#F3EFE9',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -968,7 +969,7 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#F97316',
+    color: '#D97706',
   },
   totalSpentLabel: {
     fontSize: 12,
@@ -1025,7 +1026,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   payButton: {
-    backgroundColor: '#0EA5E9',
+    backgroundColor: '#3B5D4F',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1058,7 +1059,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomPadding: {
-    height: 20,
+    height: 60,
   },
   modalOverlay: {
     flex: 1,
@@ -1108,7 +1109,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   modalBalanceInfo: {
-    backgroundColor: '#FEF3E2',
+    backgroundColor: '#F3EFE9',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -1122,7 +1123,7 @@ const styles = StyleSheet.create({
   modalBalanceAmount: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#F97316',
+    color: '#D97706',
   },
   paymentInputContainer: {
     marginBottom: 24,
@@ -1141,7 +1142,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderWidth: 2,
-    borderColor: '#0EA5E9',
+    borderColor: '#3B5D4F',
   },
   paymentInput: {
     flex: 1,
@@ -1170,7 +1171,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#0EA5E9',
+    backgroundColor: '#3B5D4F',
     alignItems: 'center',
   },
   confirmButtonText: {
@@ -1197,7 +1198,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#0EA5E9',
+    backgroundColor: '#3B5D4F',
     alignItems: 'center',
   },
   calendarApplyText: {
@@ -1244,15 +1245,15 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
   },
   calendarDayInRange: {
-    backgroundColor: '#FED7AA',
+    backgroundColor: '#EADFD2',
   },
   calendarDaySelected: {
-    backgroundColor: '#F97316',
+    backgroundColor: '#D97706',
     borderRadius: 8,
   },
   calendarDayToday: {
     borderWidth: 2,
-    borderColor: '#0EA5E9',
+    borderColor: '#3B5D4F',
     borderRadius: 8,
   },
   calendarDayText: {
@@ -1265,7 +1266,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   calendarDayTextToday: {
-    color: '#0EA5E9',
+    color: '#3B5D4F',
     fontWeight: 'bold',
   },
   calendarModal: {
@@ -1314,13 +1315,13 @@ const styles = StyleSheet.create({
     marginRight: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#FEF3E2',
+    backgroundColor: '#F3EFE9',
     borderRadius: 8,
   },
   headerDateText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#F97316',
+    color: '#D97706',
     maxWidth: 150,
   },
 });

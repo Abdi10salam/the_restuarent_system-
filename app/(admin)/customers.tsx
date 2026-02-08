@@ -309,11 +309,11 @@ export default function AdminCustomersScreen() {
 
                 <View style={styles.customerStats}>
                   <View style={styles.statItem}>
-                    <Receipt size={16} color="#F97316" strokeWidth={2} />
+                    <Receipt size={16} color="#D97706" strokeWidth={2} />
                     <Text style={styles.statText}>{stats.totalOrders} orders</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <DollarSign size={16} color="#10B981" strokeWidth={2} />
+                    <DollarSign size={16} color="#3B5D4F" strokeWidth={2} />
                     <Text style={styles.statText}>{formatCurrency(customer.totalSpent)} spent</Text>
                   </View>
                   {stats.pendingOrders > 0 && (
@@ -400,10 +400,10 @@ export default function AdminCustomersScreen() {
                     disabled={isUploadingPhoto || isSubmitting}
                   >
                     {isUploadingPhoto ? (
-                      <ActivityIndicator color="#10B981" />
+                      <ActivityIndicator color="#3B5D4F" />
                     ) : (
                       <>
-                        <Camera size={24} color="#10B981" strokeWidth={2} />
+                        <Camera size={24} color="#3B5D4F" strokeWidth={2} />
                         <Text style={styles.photoUploadText}>Add Photo</Text>
                       </>
                     )}
@@ -561,10 +561,10 @@ export default function AdminCustomersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F3EE',
   },
   headerButton: {
-    backgroundColor: '#10B981', // green
+    backgroundColor: '#3B5D4F', // green
     padding: 10,
     borderRadius: 999,          // fully round
     alignItems: 'center',
@@ -575,6 +575,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 50,
   },
   infoSection: {
     flexDirection: 'row',      // 👈 makes them side by side
@@ -656,7 +657,7 @@ const styles = StyleSheet.create({
   },
   customerNumber: {
     fontSize: 14,
-    color: '#F97316',
+    color: '#D97706',
     fontWeight: 'bold',
     marginBottom: 8,
   },
@@ -716,11 +717,11 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F97316',
+    color: '#D97706',
   },
   balanceHint: {
     fontSize: 12,
-    color: '#10B981',
+    color: '#3B5D4F',
     fontStyle: 'italic',
   },
   emptyState: {
@@ -742,7 +743,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomPadding: {
-    height: 20,
+    height: 60,
   },
   modalOverlay: {
     flex: 1,
@@ -796,7 +797,7 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     backgroundColor: '#F9FAFB',
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: '#3B5D4F',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
@@ -805,7 +806,7 @@ const styles = StyleSheet.create({
   photoUploadText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#10B981',
+    color: '#3B5D4F',
   },
   photoPreviewContainer: {
     position: 'relative',
@@ -832,7 +833,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 12,
@@ -886,8 +887,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   selectedRoleType: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
+    backgroundColor: '#D97706',
+    borderColor: '#D97706',
   },
   roleTypeText: {
     fontSize: 14,
@@ -923,8 +924,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   selectedPaymentType: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    backgroundColor: '#3B5D4F',
+    borderColor: '#3B5D4F',
   },
   paymentTypeText: {
     fontSize: 14,
@@ -954,7 +955,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     alignItems: 'center',
   },
   addCustomerButtonText: {

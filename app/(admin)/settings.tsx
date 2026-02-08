@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 16,
+    paddingBottom: 30,
   },
   section: {
     marginBottom: 24,
@@ -223,6 +224,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   bottomPadding: {
-    height: 20,
+    height: 60,
   },
 });

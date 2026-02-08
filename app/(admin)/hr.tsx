@@ -318,7 +318,7 @@ export default function HRManagementScreen() {
           >
             <UserCog
               size={18}
-              color={activeFilter === 'staff' ? '#fff' : '#F97316'}
+              color={activeFilter === 'staff' ? '#fff' : '#D97706'}
               strokeWidth={2}
             />
             <Text style={[
@@ -338,7 +338,7 @@ export default function HRManagementScreen() {
           >
             <Shield
               size={18}
-              color={activeFilter === 'admins' ? '#fff' : '#10B981'}
+              color={activeFilter === 'admins' ? '#fff' : '#3B5D4F'}
               strokeWidth={2}
             />
             <Text style={[
@@ -374,7 +374,7 @@ export default function HRManagementScreen() {
         {showAdmins && sortedAdminMembers.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
-              <Shield size={20} color="#10B981" strokeWidth={2} />
+              <Shield size={20} color="#3B5D4F" strokeWidth={2} />
               <Text style={styles.sectionHeaderText}>
                 Administrators {activeFilter !== 'all' && `(${sortedAdminMembers.length})`}
               </Text>
@@ -405,7 +405,7 @@ export default function HRManagementScreen() {
                         />
                       ) : (
                         <View style={[styles.profilePhotoPlaceholder, styles.adminPhotoPlaceholder]}>
-                          <Shield size={28} color="#10B981" strokeWidth={2} />
+                          <Shield size={28} color="#3B5D4F" strokeWidth={2} />
                         </View>
                       )}
 
@@ -431,7 +431,7 @@ export default function HRManagementScreen() {
 
                     <View style={styles.staffStats}>
                       <View style={styles.statItem}>
-                        <ShoppingCart size={16} color="#10B981" strokeWidth={2} />
+                        <ShoppingCart size={16} color="#3B5D4F" strokeWidth={2} />
                         <Text style={styles.statText}>{stats.totalOrders}</Text>
                       </View>
                       <View style={styles.statItem}>
@@ -467,7 +467,7 @@ export default function HRManagementScreen() {
         {showStaff && sortedStaffMembers.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
-              <UserCog size={20} color="#F97316" strokeWidth={2} />
+              <UserCog size={20} color="#D97706" strokeWidth={2} />
               <Text style={styles.sectionHeaderText}>
                 Receptionists {activeFilter !== 'all' && `(${sortedStaffMembers.length})`}
               </Text>
@@ -496,7 +496,7 @@ export default function HRManagementScreen() {
                         />
                       ) : (
                         <View style={styles.profilePhotoPlaceholder}>
-                          <UserCog size={28} color="#F97316" strokeWidth={2} />
+                          <UserCog size={28} color="#D97706" strokeWidth={2} />
                         </View>
                       )}
 
@@ -520,7 +520,7 @@ export default function HRManagementScreen() {
 
                     <View style={styles.staffStats}>
                       <View style={styles.statItem}>
-                        <ShoppingCart size={16} color="#10B981" strokeWidth={2} />
+                        <ShoppingCart size={16} color="#3B5D4F" strokeWidth={2} />
                         <Text style={styles.statText}>{stats.totalOrders}</Text>
                       </View>
                       <View style={styles.statItem}>
@@ -583,9 +583,9 @@ export default function HRManagementScreen() {
                           isAdmin && styles.adminPhotoPlaceholder
                         ]}>
                           {isAdmin ? (
-                            <Shield size={28} color="#10B981" strokeWidth={2} />
+                            <Shield size={28} color="#3B5D4F" strokeWidth={2} />
                           ) : (
-                            <UserCog size={28} color="#F97316" strokeWidth={2} />
+                            <UserCog size={28} color="#D97706" strokeWidth={2} />
                           )}
                         </View>
                       )}
@@ -621,7 +621,7 @@ export default function HRManagementScreen() {
 
                     <View style={styles.staffStats}>
                       <View style={styles.statItem}>
-                        <Receipt size={16} color="#10B981" strokeWidth={2} />
+                        <Receipt size={16} color="#3B5D4F" strokeWidth={2} />
                         <Text style={styles.statText}>{stats.totalOrders}</Text>
                       </View>
                       <View style={styles.statItem}>
@@ -718,7 +718,7 @@ export default function HRManagementScreen() {
                   >
                     <UserCog
                       size={20}
-                      color={newStaff.role === 'receptionist' ? '#fff' : '#F97316'}
+                      color={newStaff.role === 'receptionist' ? '#fff' : '#D97706'}
                       strokeWidth={2}
                     />
                     <Text style={[
@@ -739,7 +739,7 @@ export default function HRManagementScreen() {
                   >
                     <Shield
                       size={20}
-                      color={newStaff.role === 'admin' ? '#fff' : '#10B981'}
+                      color={newStaff.role === 'admin' ? '#fff' : '#3B5D4F'}
                       strokeWidth={2}
                     />
                     <Text style={[
@@ -781,10 +781,10 @@ export default function HRManagementScreen() {
                     disabled={isUploadingPhoto || isSubmitting}
                   >
                     {isUploadingPhoto ? (
-                      <ActivityIndicator color="#10B981" />
+                      <ActivityIndicator color="#3B5D4F" />
                     ) : (
                       <>
-                        <Camera size={24} color="#10B981" strokeWidth={2} />
+                        <Camera size={24} color="#3B5D4F" strokeWidth={2} />
                         <Text style={styles.photoUploadText}>Add Photo</Text>
                       </>
                     )}
@@ -862,10 +862,10 @@ export default function HRManagementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F3EE',
   },
   headerButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     padding: 10,
     borderRadius: 999,
     alignItems: 'center',
@@ -876,6 +876,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 40,
   },
   infoSection: {
     marginBottom: 16,
@@ -917,9 +918,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   filterButtonActive: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
-    shadowColor: '#10B981',
+    backgroundColor: '#3B5D4F',
+    borderColor: '#3B5D4F',
+    shadowColor: '#3B5D4F',
     shadowOpacity: 0.2,
     elevation: 4,
   },
@@ -954,16 +955,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
     borderLeftWidth: 4,
-    borderLeftColor: '#F97316',
+    borderLeftColor: '#D97706',
     position: 'relative', // For rank badge positioning
   },
   adminCard: {
-    borderLeftColor: '#10B981',
+    borderLeftColor: '#3B5D4F',
   },
   // 🆕 NEW: Rank badge styles
   adminRankBadge: {
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
+    backgroundColor: '#3B5D4F',
+    shadowColor: '#3B5D4F',
   },
   rankText: {
     fontSize: 12,
@@ -1017,13 +1018,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F97316',
+    backgroundColor: '#D97706',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   adminBadge: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
   },
   staffBadgeText: {
     fontSize: 10,
@@ -1085,7 +1086,7 @@ const styles = StyleSheet.create({
   performanceValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#10B981',
+    color: '#3B5D4F',
   },
   emptyState: {
     backgroundColor: '#fff',
@@ -1106,7 +1107,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomPadding: {
-    height: 20,
+    height: 60,
   },
   modalOverlay: {
     flex: 1,
@@ -1170,8 +1171,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   roleButtonActive: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    backgroundColor: '#3B5D4F',
+    borderColor: '#3B5D4F',
   },
   roleButtonText: {
     fontSize: 14,
@@ -1198,7 +1199,7 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     backgroundColor: '#F9FAFB',
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: '#3B5D4F',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1207,7 +1208,7 @@ const styles = StyleSheet.create({
   photoUploadText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#10B981',
+    color: '#3B5D4F',
   },
   photoPreviewContainer: {
     position: 'relative',
@@ -1234,7 +1235,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 12,
@@ -1282,7 +1283,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B5D4F',
     alignItems: 'center',
   },
   addStaffButtonText: {

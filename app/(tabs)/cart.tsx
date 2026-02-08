@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 8,
-    paddingBottom: 200,
+    paddingBottom: 325,
   },
   emptyContainer: {
     flex: 1,
@@ -225,7 +225,8 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
     padding: 20,
-    paddingBottom: 34,
+    paddingBottom: 75,
+    marginBottom: 30,
   },
   totalContainer: {
     flexDirection: 'row',

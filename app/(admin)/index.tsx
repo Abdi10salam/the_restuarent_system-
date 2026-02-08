@@ -215,6 +215,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingTop: 24,
+    paddingBottom: 50,
   },
 
   // REVENUE CARD
@@ -415,6 +416,6 @@ const styles = StyleSheet.create({
 
 
   bottomPadding: {
-    height: 20,
+    height: 60,
   },
 });

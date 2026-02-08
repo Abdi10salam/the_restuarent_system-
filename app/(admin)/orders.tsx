@@ -315,6 +315,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 8,
+    paddingBottom: 30,
   },
   topSummary: {
     paddingHorizontal: 24,
@@ -500,6 +501,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomPadding: {
-    height: 20,
+    height: 55,
   },
 });

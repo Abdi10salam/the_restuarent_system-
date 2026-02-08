@@ -326,6 +326,14 @@ export default function AdminMenuScreen() {
         categories={categories}
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
+        iconMap={{
+          All: require('../../assets/images/all.png'),
+          Breakfast: require('../../assets/images/coffee-cup.png'),
+          Lunch: require('../../assets/images/lunch.png'),
+          Dinner: require('../../assets/images/dinner.png'),
+          Supper: require('../../assets/images/supper.png'),
+          Juices: require('../../assets/images/juices.png'),
+        }}
       />
 
       {isLoading ? (
@@ -618,7 +626,7 @@ const styles = StyleSheet.create({
   },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1 },
-  scrollContent: { paddingTop: 12, paddingBottom: 24 },
+  scrollContent: { paddingTop: 12, paddingBottom: 60 },
   dishesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -687,7 +695,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: { fontSize: 16, fontWeight: 'bold', color: '#1F2937' },
-  bottomPadding: { height: 20 },
+  bottomPadding: { height: 60 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

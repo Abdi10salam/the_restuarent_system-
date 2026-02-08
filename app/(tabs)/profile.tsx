@@ -342,6 +342,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 120,
   },
   profileCard: {
     backgroundColor: '#fff',
@@ -631,6 +632,6 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   bottomPadding: {
-    height: 20,
+    height: 60,
   },
 });
