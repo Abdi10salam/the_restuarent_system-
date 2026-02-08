@@ -1,4 +1,4 @@
-// types/index.ts - UPDATED WITH RECEPTIONIST SUPPORT
+// types/index.ts - UPDATED WITH WAITER/CHEF ROLES AND SALARY
 
 export interface Dish {
   id: string;
@@ -8,7 +8,7 @@ export interface Dish {
   image: string;
   category: string;
   available: boolean;
-  stockQuantity?: number | null; // 🆕 NEW: null = unlimited, number = limited stock
+  stockQuantity?: number | null;
 }
 
 export interface CartItem {
@@ -16,28 +16,26 @@ export interface CartItem {
   quantity: number;
 }
 
-// 🆕 NEW: User role type
-export type UserRole = 'customer' | 'receptionist' | 'admin';
+// 🆕 UPDATED: User role type with Waiter and Chef
+export type UserRole = 'customer' | 'receptionist' | 'waiter' | 'chef' | 'admin';
 
-// 🆕 UPDATED: Customer interface with role and customerNumber
+// 🆕 UPDATED: Customer interface with Waiter/Chef roles and salary
 export interface Customer {
   id: string;
   name: string;
   email: string;
-  phone?: string; // 🆕 NEW - Optional phone number
-  profilePhoto?: string; // 🆕 NEW - Optional profile photo URL
+  phone?: string;
+  profilePhoto?: string;
   customerNumber: number;
- role: 'receptionist' | 'customer' | 'admin' | 'master_admin';
+  role: 'receptionist' | 'customer' | 'admin' | 'master_admin' | 'waiter' | 'chef';
   paymentType: 'cash' | 'monthly';
   monthlyBalance: number;
   totalSpent: number;
+  salary?: number; // 🆕 NEW: Monthly salary for staff
   isFirstLogin: boolean;
   password?: string;
   registeredAt: string;
-  
 }
-
-// 🆕 UPDATED: Order interface with placedBy tracking
 export interface Order {
   id: string;
   customerId: string;
@@ -50,9 +48,9 @@ export interface Order {
   createdAt: string;
   approvedAt?: string;
   rejectedAt?: string;
-  placedBy?: string;             // 🆕 NEW: Email of receptionist who placed the order
-  placedByName?: string;         // 🆕 NEW: Name of receptionist
-  isWalkIn?: boolean;            // 🆕 NEW: True if walk-in customer
+  placedBy?: string;
+  placedByName?: string;
+  isWalkIn?: boolean;
 }
 
 export interface MonthlyBill {
@@ -67,27 +65,25 @@ export interface MonthlyBill {
   paidAt?: string;
 }
 
-// 🆕 UPDATED: AuthState with role support
 export interface AuthState {
   isAuthenticated: boolean;
-  userType: 'customer' | 'admin' | 'receptionist' | null;  // 🆕 Added receptionist
+  userType: 'customer' | 'admin' | 'receptionist' | 'waiter' | 'chef' | null;  // 🆕 Added waiter & chef
   currentUser: Customer | null;
 }
 
-// 🆕 NEW: Permission types for role-based access control
-export type Permission = 
+export type Permission =
   | 'view_menu'
   | 'place_order'
-  | 'place_order_for_others'    // Receptionist can order for customers
+  | 'place_order_for_others'
   | 'approve_orders'
   | 'view_all_orders'
   | 'search_customers'
   | 'print_receipt'
-  | 'manage_dishes'             // Admin only
-  | 'manage_customers'          // Admin only
-  | 'view_analytics';           // Admin only
+  | 'manage_dishes'
+  | 'manage_customers'
+  | 'view_analytics';
 
-// 🆕 NEW: Role-Permission mapping
+// 🆕 UPDATED: Role-Permission mapping with Waiter and Chef
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   customer: [
     'view_menu',
@@ -101,6 +97,17 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_all_orders',
     'search_customers',
     'print_receipt',
+  ],
+  waiter: [ // 🆕 NEW: Waiter permissions
+    'view_menu',
+    'place_order',
+    'place_order_for_others',
+    'view_all_orders',
+    'search_customers',
+  ],
+  chef: [ // 🆕 NEW: Chef permissions
+    'view_menu',
+    'view_all_orders',
   ],
   admin: [
     'view_menu',
@@ -116,12 +123,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
 };
 
-// 🆕 NEW: Helper function to check permissions
 export function hasPermission(role: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) || false;
 }
 
-// 🆕 NEW: Walk-in customer template
 export const WALK_IN_CUSTOMER_TEMPLATE = {
   id: 'walk-in',
   email: 'walkin@restaurant.com',

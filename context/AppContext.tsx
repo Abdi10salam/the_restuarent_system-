@@ -470,6 +470,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.isFirstLogin !== undefined) updateData.is_first_login = updates.isFirstLogin;
       if (updates.role !== undefined) updateData.role = updates.role;
       if (updates.customerNumber !== undefined) updateData.customer_number = updates.customerNumber;
+      if (updates.salary !== undefined) updateData.salary = updates.salary;
 
       const { error } = await supabase
         .from('customers')
