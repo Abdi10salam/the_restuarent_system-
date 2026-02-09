@@ -25,6 +25,8 @@ export default function HRManagementScreen() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showActionsModal, setShowActionsModal] = useState(false);
+  const [selectedStaffForActions, setSelectedStaffForActions] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
@@ -175,9 +177,8 @@ export default function HRManagementScreen() {
           style: action === 'disable' ? 'destructive' : 'default',
           onPress: async () => {
             try {
-              // We'll use isFirstLogin as disabled flag (true = disabled)
               await updateCustomerInSupabase(staff.id, {
-                isFirstLogin: !currentlyDisabled // Toggle disabled state
+                isDisabled: !currentlyDisabled
               });
 
               Alert.alert(
@@ -436,34 +437,15 @@ export default function HRManagementScreen() {
     }
   };
 
-  // 🆕 NEW: Staff card actions menu
+  // 🆕 NEW: Staff card actions modal
   const showStaffActions = (staff: Customer) => {
-    const isDisabled = staff.isFirstLogin === true; // Using isFirstLogin as disabled flag
+    setSelectedStaffForActions(staff);
+    setShowActionsModal(true);
+  };
 
-    Alert.alert(
-      staff.name,
-      'Choose an action',
-      [
-        {
-          text: 'Edit Staff',
-          onPress: () => handleEditStaff(staff)
-        },
-        {
-          text: isDisabled ? 'Enable Staff' : 'Disable Staff',
-          onPress: () => handleToggleStaffStatus(staff, isDisabled),
-          style: isDisabled ? 'default' : 'destructive'
-        },
-        {
-          text: 'Delete Staff',
-          onPress: () => handleDeleteStaff(staff),
-          style: 'destructive'
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        }
-      ]
-    );
+  const closeStaffActions = () => {
+    setShowActionsModal(false);
+    setSelectedStaffForActions(null);
   };
 
   // Render staff card
@@ -471,76 +453,94 @@ export default function HRManagementScreen() {
     const stats = getStaffStats(member.id);
     const roleInfo = getRoleInfo(member.role);
     const RoleIcon = roleInfo.icon;
-    const isDisabled = member.isFirstLogin === true;
+    const isDisabled = member.isDisabled === true;
 
     return (
       <TouchableOpacity
         key={member.id}
-        style={[
-          styles.staffCard,
-          { borderLeftColor: roleInfo.color },
-          isDisabled && styles.disabledCard
-        ]}
+        style={[styles.staffCard, isDisabled && styles.disabledCard]}
         activeOpacity={0.7}
         onPress={() => showStaffActions(member)}
       >
-        <View style={styles.staffHeader}>
-          <View style={styles.staffMainInfo}>
-            {member.profilePhoto ? (
-              <Image source={{ uri: member.profilePhoto }} style={styles.profilePhoto} />
-            ) : (
-              <View style={[styles.profilePhotoPlaceholder, { backgroundColor: `${roleInfo.color}20` }]}>
-                <RoleIcon size={28} color={roleInfo.color} strokeWidth={2} />
-              </View>
-            )}
+        <View style={[styles.cardAccent, { backgroundColor: roleInfo.color }]} />
 
-            <View style={styles.staffInfo}>
+        <View style={styles.cardContent}>
+          <View style={styles.cardTopRow}>
+            <View style={styles.avatarWrap}>
+              {member.profilePhoto ? (
+                <Image source={{ uri: member.profilePhoto }} style={styles.avatarImage} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: `${roleInfo.color}18` }]}>
+                  <RoleIcon size={26} color={roleInfo.color} strokeWidth={2} />
+                </View>
+              )}
+            </View>
+
+            <View style={styles.cardMain}>
               <View style={styles.nameRow}>
                 <Text style={styles.staffName}>{member.name}</Text>
-                <View style={[styles.staffBadge, { backgroundColor: roleInfo.color }]}>
-                  <RoleIcon size={10} color="#fff" strokeWidth={2} />
-                  <Text style={styles.staffBadgeText}>{roleInfo.label}</Text>
+              </View>
+
+              <View style={styles.roleRow}>
+                <View style={[styles.rolePill, { backgroundColor: `${roleInfo.color}18` }]}>
+                  <Text style={[styles.rolePillText, { color: roleInfo.color }]}>{roleInfo.label}</Text>
+                </View>
+                <View style={[styles.statusPill, isDisabled ? styles.statusPillDisabled : styles.statusPillActive]}>
+                  <Text style={[styles.statusText, isDisabled ? styles.statusTextDisabled : styles.statusTextActive]}>
+                    {isDisabled ? 'Disabled' : 'Active'}
+                  </Text>
                 </View>
               </View>
-              <Text style={styles.staffEmail}>📧 {member.email}</Text>
+
+              <View style={styles.infoRow}>
+                <Mail size={14} color="#6B7280" strokeWidth={2} />
+                <Text style={styles.infoText}>{member.email}</Text>
+              </View>
               {member.phone && (
-                <Text style={styles.staffPhone}>📱 {member.phone}</Text>
+                <View style={styles.infoRow}>
+                  <Phone size={14} color="#6B7280" strokeWidth={2} />
+                  <Text style={styles.infoText}>{member.phone}</Text>
+                </View>
               )}
-              {member.salary && (
-                <Text style={styles.staffSalary}>
-                  💰 Salary: {formatCurrency(member.salary)}/month
-                </Text>
-              )}
+            </View>
+
+            <View style={styles.cardMeta}>
+              <ShoppingCart size={16} color="#9CA3AF" strokeWidth={2} />
+              <Text style={styles.metaText}>{stats.totalOrders}</Text>
             </View>
           </View>
 
-          <View style={styles.staffStats}>
-            <View style={styles.statItem}>
-              <ShoppingCart size={16} color="#10B981" strokeWidth={2} />
-              <Text style={styles.statText}>{stats.totalOrders}</Text>
+          {stats.totalOrders > 0 && (
+            <View style={styles.statGrid}>
+              <View style={styles.statCell}>
+                <Text style={styles.statLabel}>Walk-in</Text>
+                <Text style={styles.statValue}>{stats.walkInOrders}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statCell}>
+                <Text style={styles.statLabel}>Customer</Text>
+                <Text style={styles.statValue}>{stats.customerOrders}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statCell}>
+                <Text style={styles.statLabel}>Pending</Text>
+                <Text style={[styles.statValue, styles.statPending]}>{stats.pendingOrders}</Text>
+              </View>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statText}>{formatCurrency(stats.revenue)}</Text>
-            </View>
+          )}
+
+          <View style={styles.cardBottomRow}>
+            {member.salary ? (
+              <View style={styles.salaryPill}>
+                <Image source={require('../../assets/images/money.png')} style={styles.moneyIcon} />
+                <Text style={styles.salaryText}>{formatCurrency(member.salary)}/mo</Text>
+              </View>
+            ) : (
+              <View />
+            )}
+            <Text style={styles.totalText}>Total: {formatCurrency(stats.revenue)}</Text>
           </View>
         </View>
-
-        {stats.totalOrders > 0 && (
-          <View style={styles.performanceSection}>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Walk-in</Text>
-              <Text style={styles.performanceValue}>{stats.walkInOrders}</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Customer</Text>
-              <Text style={styles.performanceValue}>{stats.customerOrders}</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <Text style={styles.performanceLabel}>Pending</Text>
-              <Text style={[styles.performanceValue, { color: '#F59E0B' }]}>{stats.pendingOrders}</Text>
-            </View>
-          </View>
-        )}
       </TouchableOpacity>
     );
   };
@@ -820,7 +820,6 @@ export default function HRManagementScreen() {
               </View>
 
               <View style={styles.inputContainer}>
-                <DollarSign size={20} color="#6B7280" strokeWidth={2} />
                 <TextInput
                   style={styles.input}
                   placeholder="Monthly Salary/Wage (Optional)"
@@ -867,6 +866,96 @@ export default function HRManagementScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Staff Actions Modal */}
+      <Modal
+        visible={showActionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeStaffActions}
+      >
+        <TouchableOpacity
+          style={styles.actionsOverlay}
+          activeOpacity={1}
+          onPress={closeStaffActions}
+        >
+          <TouchableOpacity
+            style={styles.actionsSheet}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            {selectedStaffForActions && (
+              <>
+                <View style={styles.actionsHeader}>
+                  <View style={styles.actionsAvatar}>
+                    {selectedStaffForActions.profilePhoto ? (
+                      <Image
+                        source={{ uri: selectedStaffForActions.profilePhoto }}
+                        style={styles.actionsAvatarImage}
+                      />
+                    ) : (
+                      <User size={22} color="#3B5D4F" strokeWidth={2} />
+                    )}
+                  </View>
+                  <View style={styles.actionsHeaderText}>
+                    <Text style={styles.actionsTitle}>{selectedStaffForActions.name}</Text>
+                    <Text style={styles.actionsSubtitle}>{selectedStaffForActions.email}</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.actionsItem}
+                  onPress={() => {
+                    closeStaffActions();
+                    handleEditStaff(selectedStaffForActions);
+                  }}
+                >
+                  <View style={[styles.actionsIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                    <Edit size={16} color="#10B981" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.actionsItemText}>Edit Staff</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionsItem}
+                  onPress={() => {
+                    const isDisabled = selectedStaffForActions.isDisabled === true;
+                    closeStaffActions();
+                    handleToggleStaffStatus(selectedStaffForActions, isDisabled);
+                  }}
+                >
+                  <View style={[styles.actionsIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                    <UserX size={16} color="#D97706" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.actionsItemText}>
+                    {selectedStaffForActions.isDisabled ? 'Enable Staff' : 'Disable Staff'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionsItem, styles.actionsDangerItem]}
+                  onPress={() => {
+                    closeStaffActions();
+                    handleDeleteStaff(selectedStaffForActions);
+                  }}
+                >
+                  <View style={[styles.actionsIconWrap, { backgroundColor: '#FEE2E2' }]}>
+                    <Trash2 size={16} color="#EF4444" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.actionsItemText}>Delete Staff</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionsCancel}
+                  onPress={closeStaffActions}
+                >
+                  <Text style={styles.actionsCancelText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Edit Staff Modal - KEEPING SAME AS BEFORE */}
@@ -1094,87 +1183,59 @@ const styles = StyleSheet.create({
   },
   staffCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 22,
     marginBottom: 12,
-    padding: 20,
+    padding: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F97316',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    overflow: 'hidden',
     position: 'relative',
   },
   disabledCard: {
     opacity: 0.6,
     backgroundColor: '#F3F4F6',
   },
-  badgeContainer: {
+  cardAccent: {
+    width: 6,
     position: 'absolute',
-    top: 58,
-    right: 2,
-    flexDirection: 'row',
-    zIndex: 10,
+    left: 0,
+    top: 0,
+    bottom: 0,
   },
-  disabledBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
+  cardContent: {
+    padding: 18,
+    paddingLeft: 22,
   },
-  disabledBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#EF4444',
-  },
-  editBadge: {
+  cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E0F2FE',
-  },
-  editBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#10B981',
-  },
-  staffHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  staffMainInfo: {
-    flexDirection: 'row',
-    flex: 1,
     gap: 12,
+    marginBottom: 12,
   },
-  profilePhoto: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F3F4F6',
-  },
-  profilePhotoPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FEF3E2',
-    justifyContent: 'center',
+  avatarWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  staffInfo: {
+  avatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardMain: {
     flex: 1,
   },
   nameRow: {
@@ -1189,76 +1250,125 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
-  staffBadge: {
+  roleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#D97706',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  staffBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  staffEmail: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  staffPhone: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  staffSalary: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#10B981',
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  staffStats: {
     gap: 8,
-    alignItems: 'flex-end',
+    marginBottom: 6,
   },
-  statItem: {
+  rolePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  rolePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  statusPillActive: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillDisabled: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  statusTextActive: {
+    color: '#16A34A',
+  },
+  statusTextDisabled: {
+    color: '#EF4444',
+  },
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 4,
   },
-  statText: {
+  infoText: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  cardMeta: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: '700',
+    color: '#6B7280',
   },
-  performanceSection: {
+  statGrid: {
     flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    gap: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  performanceItem: {
+  statCell: {
     flex: 1,
     alignItems: 'center',
   },
-  performanceLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginBottom: 6,
-    textAlign: 'center',
+  statDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#E5E7EB',
   },
-  performanceValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#3B5D4F',
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  statPending: {
+    color: '#F59E0B',
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  salaryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#EFFFF7',
+  },
+  salaryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  moneyIcon: {
+    width: 16,
+    height: 16,
+    tintColor: '#10B981',
+  },
+  totalText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
   },
   emptyState: {
     backgroundColor: '#fff',
@@ -1287,6 +1397,90 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+  },
+  actionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  actionsSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  actionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  actionsAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionsAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  actionsHeaderText: {
+    flex: 1,
+  },
+  actionsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  actionsSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  actionsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+    marginBottom: 10,
+  },
+  actionsDangerItem: {
+    backgroundColor: '#FFF5F5',
+  },
+  actionsIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionsItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  actionsCancel: {
+    marginTop: 6,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  actionsCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
   },
   modalContent: {
     backgroundColor: '#fff',

@@ -32,6 +32,7 @@ export interface Customer {
   monthlyBalance: number;
   totalSpent: number;
   salary?: number; // 🆕 NEW: Monthly salary for staff
+  isDisabled?: boolean; // 🆕 NEW: Staff disabled status
   isFirstLogin: boolean;
   password?: string;
   registeredAt: string;

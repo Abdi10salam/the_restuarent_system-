@@ -1,15 +1,24 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Image } from 'react-native';
 import { CreditCard, Calendar } from 'lucide-react-native';
 import { CartItem } from '../../components/CartItem';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLocalSearchParams } from 'expo-router';
 import { Order } from '../../types';
 import { formatCurrency } from '../../utils/currency';
+import { WALK_IN_CUSTOMER_ID } from '../lib/walkin-customer';
 
 export default function CartScreen() {
   const { state: appState, dispatch, placeOrderToSupabase } = useApp();
   const { state: authState } = useAuth();
+  const params = useLocalSearchParams<{
+    orderType?: string;
+    customerId?: string;
+    customerName?: string;
+    customerEmail?: string;
+    paymentType?: string;
+  }>();
   const { cart } = appState;
   
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -18,6 +27,46 @@ export default function CartScreen() {
     (sum, item) => sum + item.dish.price * item.quantity,
     0
   );
+
+  const orderContext = useMemo(() => {
+    const orderType = params.orderType;
+    const isWalkInOrder = orderType === 'walk-in';
+    const isForCustomerOrder = orderType === 'for-customer';
+
+    const targetCustomerId = isWalkInOrder
+      ? WALK_IN_CUSTOMER_ID
+      : isForCustomerOrder && params.customerId
+        ? params.customerId
+        : authState.currentUser?.id;
+
+    const targetCustomerName = isWalkInOrder
+      ? 'Walk-in Customer'
+      : isForCustomerOrder && params.customerName
+        ? params.customerName
+        : authState.currentUser?.name;
+
+    const targetCustomerEmail = isWalkInOrder
+      ? 'walk-in@restaurant.local'
+      : isForCustomerOrder && params.customerEmail
+        ? params.customerEmail
+        : authState.currentUser?.email;
+
+    return {
+      isWalkInOrder,
+      isForCustomerOrder,
+      targetCustomerId,
+      targetCustomerName,
+      targetCustomerEmail,
+    };
+  }, [
+    authState.currentUser?.id,
+    authState.currentUser?.name,
+    authState.currentUser?.email,
+    params.customerEmail,
+    params.customerId,
+    params.customerName,
+    params.orderType,
+  ]);
 
   const handleUpdateQuantity = (dishId: string, quantity: number) => {
     dispatch({ type: 'UPDATE_QUANTITY', dishId, quantity });
@@ -38,20 +87,31 @@ export default function CartScreen() {
       return;
     }
 
+    if (orderContext.isForCustomerOrder && !orderContext.targetCustomerId) {
+      Alert.alert('Error', 'Customer details missing. Please re-open customer search.');
+      return;
+    }
+
     setIsPlacingOrder(true);
 
     try {
+      const isStaffUser = authState.currentUser.role !== 'customer';
+      const shouldSetPlacedBy = isStaffUser || orderContext.isForCustomerOrder || orderContext.isWalkInOrder;
+
       // Create order object
       const newOrder: Order = {
         id: Date.now().toString(),
-        customerId: authState.currentUser.id,
-        customerName: authState.currentUser.name,
-        customerEmail: authState.currentUser.email,
+        customerId: orderContext.targetCustomerId || authState.currentUser.id,
+        customerName: orderContext.targetCustomerName || authState.currentUser.name,
+        customerEmail: orderContext.targetCustomerEmail || authState.currentUser.email,
         items: [...cart],
         totalAmount,
         status: 'pending',
         paymentType,
         createdAt: new Date().toISOString(),
+        placedBy: shouldSetPlacedBy ? authState.currentUser.id : undefined,
+        placedByName: shouldSetPlacedBy ? authState.currentUser.name : undefined,
+        isWalkIn: orderContext.isWalkInOrder,
       };
 
       // 🔥 Save order to Supabase

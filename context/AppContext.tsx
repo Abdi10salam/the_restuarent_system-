@@ -384,6 +384,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         paymentType: dbCustomer.payment_type,
         monthlyBalance: parseFloat(dbCustomer.monthly_balance) || 0,
         totalSpent: parseFloat(dbCustomer.total_spent) || 0,
+        isDisabled: dbCustomer.is_disabled === true,
+        salary: dbCustomer.salary !== null && dbCustomer.salary !== undefined
+          ? parseFloat(dbCustomer.salary)
+          : undefined,
         isFirstLogin: dbCustomer.is_first_login,
         registeredAt: dbCustomer.registered_at,
       }));
@@ -420,6 +424,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           payment_type: customer.paymentType,
           monthly_balance: 0,
           total_spent: 0,
+          is_disabled: customer.isDisabled ?? false,
+          salary: customer.salary ?? null,
           is_first_login: true,
           created_by_admin_email: adminEmail,
         })
@@ -439,6 +445,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         paymentType: data.payment_type,
         monthlyBalance: 0,
         totalSpent: 0,
+        isDisabled: data.is_disabled === true,
+        salary: data.salary !== null && data.salary !== undefined
+          ? parseFloat(data.salary)
+          : undefined,
         isFirstLogin: true,
         registeredAt: data.registered_at,
       };
@@ -468,6 +478,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.monthlyBalance !== undefined) updateData.monthly_balance = updates.monthlyBalance;
       if (updates.totalSpent !== undefined) updateData.total_spent = updates.totalSpent;
       if (updates.isFirstLogin !== undefined) updateData.is_first_login = updates.isFirstLogin;
+      if (updates.isDisabled !== undefined) updateData.is_disabled = updates.isDisabled;
       if (updates.role !== undefined) updateData.role = updates.role;
       if (updates.customerNumber !== undefined) updateData.customer_number = updates.customerNumber;
       if (updates.salary !== undefined) updateData.salary = updates.salary;

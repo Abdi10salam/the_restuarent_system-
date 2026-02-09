@@ -15,6 +15,7 @@ export interface DatabaseCustomer {
   monthly_balance: number
   total_spent: number
   is_first_login: boolean
+  is_disabled?: boolean
   created_by_admin_email: string
   registered_at: string
   updated_at: string
